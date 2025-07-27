@@ -28,7 +28,7 @@
       ],
       "versions": [
         {
-          "downloadURL": "https://github.com/zzanehip/The-OldOS-Project/releases/download/2.0_1/OldOS-Unsigned.ipa",
+          "downloadURL": "https://github.com/zzanehip/The-OldOS-Project/releases/download/2.0_1/OldOS.ipa",
           "size": 82600000,
           "version": "2.0",
           "buildVersion": "1",
@@ -50,8 +50,7 @@
           "NSPhotoLibraryAddUsageDescription": "To view, manage, and add photos to your photo library in OldOS, please enable access. Then close and re-open the Photos app.",
           "NSPhotoLibraryUsageDescription": "To view, manage, and add photos to your photo library in OldOS, please enable access. Then close and re-open the Photos app."
         }
-      },
-      "patreon": {}
+      }
     }
   ],
   "news": []
