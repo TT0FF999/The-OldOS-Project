@@ -455,7 +455,15 @@ struct now_playing_tracks: View {
                 }.onChange(of: current_track_rating) { rating in
                     let music_player = MPMusicPlayerController.systemMusicPlayer
                     let current = music_player.nowPlayingItem
-                    current?.setValue(rating, forKey: "rating")
+                    if let current = current {
+                        let nsNumberRating = NSNumber(value: rating ?? 1)
+                        if current.responds(to: Selector("setRating:")) {
+                            current.setValue(nsNumberRating, forKey: "rating")
+                        } else {
+                            print("Unresponsive to setting, problem with k/v")
+                        }
+                    }
+//                    current?.setValue(rating, forKey: "rating1")
                 }
             }.simultaneousGesture(TapGesture(count: 2).onEnded({withAnimation(.easeIn(duration: 0.4)){show_back_tracks.toggle()}
                                                                 DispatchQueue.main.asyncAfter(deadline:.now()) {
@@ -546,47 +554,52 @@ func removeDuplicates_Collection(_ arrayOfDicts: [MPMediaItemCollection]) -> [MP
     }
     return removeDuplicates
 }
-func getHoursMinutesSecondsFrom(seconds: Double) -> (hours: Int, minutes: Int, seconds: Int) {
-    let secs = Int(seconds)
-    let hours = secs / 3600
-    let minutes = (secs % 3600) / 60
-    let seconds = (secs % 3600) % 60
+func getHoursMinutesSecondsFrom(seconds raw: Double) -> (hours: Int, minutes: Int, seconds: Int) {
+    let s: Double
+    if raw.isFinite && raw >= 0 {
+        s = raw
+    } else {
+        s = 0
+    }
+    let clamped = min(max(s, 0), Double(Int.max))
+    let total = Int(clamped.rounded(.down))
+
+    let hours = total / 3600
+    let minutes = (total % 3600) / 60
+    let seconds = total % 60
     return (hours, minutes, seconds)
 }
-func formatTimeFor(seconds: Double) -> String {
-    let result = getHoursMinutesSecondsFrom(seconds: seconds)
-    let hoursString = "\(result.hours)"
-    var minutesString = "\(result.minutes)"
-    var secondsString = "\(result.seconds)"
-    if secondsString.count == 1 {
-        secondsString = "0\(result.seconds)"
-    }
-    var time = "\(hoursString):"
-    if result.hours >= 1 {
-        time.append("\(minutesString):\(secondsString)")
-    }
-    else {
-        time = "\(minutesString):\(secondsString)"
-    }
-    return time
-}
 
-func formatTimeForMinutes(seconds: Double) -> String {
-    let result = getHoursMinutesSecondsFrom(seconds: seconds)
-    let hoursString = "\(result.hours)"
-    var minutesString = "\(result.minutes)"
-    var secondsString = "\(result.seconds)"
-    if secondsString.count == 1 {
-        secondsString = "0\(result.seconds)"
+func formatTimeFor(seconds: Double) -> String {
+    let t = getHoursMinutesSecondsFrom(seconds: seconds)
+    if t.hours > 0 {
+        // Pad mm:ss when hours are present
+        let mm = String(format: "%02d", t.minutes)
+        let ss = String(format: "%02d", t.seconds)
+        return "\(t.hours):\(mm):\(ss)"
+    } else {
+        // mm:ss
+        let mm = String(t.minutes) // could also pad here if you prefer 0X for minutes < 10
+        let ss = String(format: "%02d", t.seconds)
+        return "\(mm):\(ss)"
     }
-    var time = "\(hoursString):"
-    if result.hours >= 1 {
-        time.append("\(minutesString)")
+}
+func formatTimeForMinutes(seconds raw: Double) -> String {
+    guard raw.isFinite, raw >= 0 else { return "0" }
+
+    let clamped = min(max(raw, 0), Double(Int.max))
+    let total = Int(clamped.rounded(.down))
+
+    let hours = total / 3600
+    let minutes = (total % 3600) / 60
+    let secs = total % 60
+
+    if hours > 0 {
+        let mm = String(format: "%02d", minutes)
+        return "\(hours):\(mm)"
+    } else {
+        return "\(minutes)"
     }
-    else {
-        time = "\(minutesString)"
-    }
-    return time
 }
 
 

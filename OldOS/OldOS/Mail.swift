@@ -1437,11 +1437,25 @@ class EmailManager: ObservableObject {
     var imap_fetch_session = MCOIMAPSession()
     init() {
         if account_email != "" {
+            fixMCVOIPfor16()
             setup_imap_session()
             load_email_cache()
             setup_mailcore_idle_operation()
             get_unread_count()
             fetch_folders()
+        }
+    }
+    
+    func fixMCVOIPfor16() {
+        if imap_session.responds(to: Selector(("setVoIPEnabled:"))) {
+            imap_session.setValue(false, forKey: "voIPEnabled")
+        } else {
+            imap_session.isVoIPEnabled = false
+        }
+        if imap_fetch_session.responds(to: Selector(("setVoIPEnabled:"))) {
+            imap_fetch_session.setValue(false, forKey: "voIPEnabled")
+        } else {
+            imap_fetch_session.isVoIPEnabled = false
         }
     }
     
@@ -1484,6 +1498,11 @@ class EmailManager: ObservableObject {
     
     func setup_mailcore_idle_operation() {
         self.imap_fetch_session = MCOIMAPSession()
+        if imap_fetch_session.responds(to: Selector(("setVoIPEnabled:"))) {
+            imap_fetch_session.setValue(false, forKey: "voIPEnabled")
+        } else {
+            imap_fetch_session.isVoIPEnabled = false
+        }
         self.imap_fetch_session.hostname = "imap.gmail.com"
         self.imap_fetch_session.username = self.account_email
         self.imap_fetch_session.password = KeychainWrapper.standard.string(forKey: "email_password")
@@ -1687,6 +1706,11 @@ class EmailManager: ObservableObject {
     
     func resetup_imap_session(completion: @escaping ()->()) {
         imap_session = MCOIMAPSession()
+        if imap_session.responds(to: Selector(("setVoIPEnabled:"))) {
+            imap_session.setValue(false, forKey: "voIPEnabled")
+        } else {
+            imap_session.isVoIPEnabled = false
+        }
         imap_session.hostname = "imap.gmail.com"
         imap_session.username = account_email
         imap_session.port = 993

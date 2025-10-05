@@ -39,6 +39,8 @@ struct multitasking_controller: View {
     }
 }
 
+
+
 //Here's how our view hierarchy works: we manage everything in a view I've deemed "Controller." It's super simple, we change the current view string, and the entire screen changes. Simple, elegant, and the way I like doing it.
 struct Controller: View {
     
@@ -155,7 +157,7 @@ struct Controller: View {
                 }
                 multitasking_apps.insert(current_view, at: 0)
             }
-        }
+        }.buttonStyle(buttonShapesOverride())
     }
 }
 
@@ -1161,6 +1163,12 @@ struct battery: View {
             }
             Rectangle().overlay(RoundedRectangle(cornerRadius:0.25).stroke(Color.init(red: 190/255, green: 190/255, blue: 190/255), lineWidth: 1)).foregroundColor(.clear).frame(width: 3, height: 5).offset(x:-7.95)
         }
+    }
+}
+
+struct buttonShapesOverride: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
     }
 }
 

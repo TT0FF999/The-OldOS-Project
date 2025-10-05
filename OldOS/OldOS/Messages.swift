@@ -14,6 +14,7 @@ struct Messages: View {
     @State var forward_or_backward: Bool = false
     @State var show_alert:Bool = false
     @State var increase_brightness: Bool = false
+    @State private var alertTask: Task<Void, Never>?
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -41,14 +42,22 @@ struct Messages: View {
             })
         }.onAppear() {
             UIScrollView.appearance().bounces = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            alertTask?.cancel()
+            alertTask = Task<Void, Never> { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if Task.isCancelled { return }
+
                 increase_brightness = false
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.55, blendDuration: 0.25)) {
+                withAnimation(.spring(response: 0.3,
+                                       dampingFraction: 0.55,
+                                       blendDuration: 0.25)) {
                     show_alert.toggle()
                 }
             }
         }.onDisappear() {
             UIScrollView.appearance().bounces = false
+            alertTask?.cancel()
+            alertTask = nil
         }
     }
 }
