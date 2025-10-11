@@ -13,12 +13,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        if let url = URLContexts.first?.url {
-            oauth2.handleRedirectURL(url)
-            print(url, "ZK")
+        if let url = URLContexts.first?.url,
+              let appDelegate = UIApplication.shared.delegate as? AppDelegate {
+               appDelegate.oauth2.handleRedirectURL(url)
         }
     }
-
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         // Use this method to optionally configure and attach the UIWindow `window` to the provided UIWindowScene `scene`.
@@ -31,11 +30,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Use a UIHostingController as window root view controller.
         if let windowScene = scene as? UIWindowScene {
             let window = UIWindow(windowScene: windowScene)
+            guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
+            let emailManager = EmailManager(oauth2: appDelegate.oauth2)
+            
             let context = persistentContainer.viewContext
-            window.rootViewController = HostingController(rootView: contentView.environmentObject(MusicObserver()).environmentObject(EmailManager()).environment(\.managedObjectContext, context))
+            window.rootViewController = HostingController(rootView: contentView.environmentObject(MusicObserver()).environmentObject(emailManager).environment(\.managedObjectContext, context))
             window.rootViewController?.accessibilityElementsHidden = true
             self.window = window
             window.makeKeyAndVisible()
+            
+//            appDelegate.oauth2.authConfig.authorizeEmbedded = true
+//            appDelegate.oauth2.authConfig.ui.useSafariView = true          // ← use SFSafariViewController
+//            appDelegate.oauth2.authConfig.authorizeContext = window.rootViewController  // ← a UIViewController
         }
     }
 

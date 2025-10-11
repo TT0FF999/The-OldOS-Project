@@ -11,6 +11,16 @@ import CoreData
 import OAuth2
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
+    
+    var oauth2 = OAuth2CodeGrant(settings: [
+        "client_id": "<ENTER YOURS HERE>",
+        "authorize_uri": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "scope": "https://mail.google.com/ openid email profile",
+        "redirect_uris": ["<ENTER YOURS HERE>:/oauthredirect"],
+        "secret_in_body": true,
+        "keychain": true
+    ])
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
@@ -33,45 +43,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         )
         UIDevice.current.isBatteryMonitoringEnabled = true
         
-        //Google email setup
-//        GIDSignIn.sharedInstance.restorePreviousSignIn { user, error in
-//          if error != nil || user == nil {
-//            // Show the app's signed-out state.
-//          } else {
-//            // Show the app's signed-in state.
-//          }
-//        }
+        oauth2.authParameters = [
+            "access_type": "offline",
+            "prompt": "consent"
+        ]
+       // oauth2.authConfig.authorizeEmbedded = true
+        oauth2.authConfig.authorizeEmbedded = false
+        oauth2.authConfig.ui.useSafariView = false
         
         return true
     }
-    
-//    func application(
-//      _ app: UIApplication,
-//      open url: URL, options: [UIApplication.OpenURLOptionsKey : Any] = [:]
-//    ) -> Bool {
-//      var handled: Bool
-//
-//      handled = GIDSignIn.sharedInstance.handle(url)
-//      if handled {
-//        return true
-//      }
-//
-//      // Handle other custom URL types.
-//
-//      // If not handled by this app, return false.
-//      return false
-//    }
-    
-//    func application(_ app: UIApplication,
-//                  open url: URL,
-//                  options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-//        // you should probably first check if this is the callback being opened
-//      //  if <# check #> {
-//            // if your oauth2 instance lives somewhere else, adapt accordingly
-//            oauth2.handleRedirectURL(url)
-//        return true
-//       // }
-//    }
 
     // MARK: UISceneSession Lifecycle
 
@@ -100,12 +81,3 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 }
 
-//let config = GIDConfiguration.init(clientID: "814260428968-hd7t3jtn7q3hu3p0o1fotenp35986uk2.apps.googleusercontent.com")
-
-var oauth2 = OAuth2CodeGrant(settings: [
-    "client_id": "814260428968-hd7t3jtn7q3hu3p0o1fotenp35986uk2.apps.googleusercontent.com",
-    "authorize_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://www.googleapis.com/oauth2/v3/token",
-    "scope": "https://mail.google.com",     // depends on the API you use
-    "redirect_uris": ["com.googleusercontent.apps.814260428968-hd7t3jtn7q3hu3p0o1fotenp35986uk2:/oauth"],
-])

@@ -24,7 +24,7 @@ struct Safari: View {
     @State var selecting_tab: Bool = false
     @State var instant_background_change: Bool = false
     @State var can_tap_view: Bool = true
-    @ObservedObject var views: ObservableArray<WebViewStore> = try! ObservableArray(array: [WebViewStore()]).observeChildrenChanges()
+    @StateObject var views: ObservableArray<WebViewStore>
     @StateObject var page: Page = .first()
     @State var will_remove_object: WebViewStore = WebViewStore()
     @State var did_add_to_end: Bool = false
@@ -40,19 +40,23 @@ struct Safari: View {
     init(instant_multitasking_change: Binding<Bool>) {
         _instant_multitasking_change = instant_multitasking_change
         let userDefaults = UserDefaults.standard
+        let webpages = (userDefaults.object(forKey: "webpages") as? [String:String] ?? ["0":"https://"]).sorted(by: >)
 
-        var webpages = (userDefaults.object(forKey: "webpages") as? [String:String] ?? ["0":"https://"]).sorted(by: >)
-        if webpages.count > 1 {
-        for i in 0..<(webpages.count-1) {
-            views.array.append(WebViewStore())
+        // Build a stable array of WebViewStore instances up-front
+        var stores: [WebViewStore] = []
+        stores.reserveCapacity(max(webpages.count, 1))
+        for _ in 0..<max(webpages.count, 1) {
+            stores.append(WebViewStore())
         }
-        }
+        // Load persisted URLs into the corresponding stores
         for item in webpages {
-            if let url = URL(string:item.value) {
-                views.array[Int(item.key) ?? 0].webView.load(URLRequest(url: url))
+            if let idx = Int(item.key), idx < stores.count, let url = URL(string: item.value) {
+                stores[idx].webView.load(URLRequest(url: url))
             }
         }
-
+        // Initialize the observable array as a StateObject to preserve identity across view updates
+        let observable: ObservableArray<WebViewStore> = ObservableArray(array: stores).observeChildrenChanges()
+        _views = StateObject(wrappedValue: observable)
    }
     var body: some View {
         GeometryReader { geometry in
@@ -68,7 +72,7 @@ struct Safari: View {
                                     ScrollView([]) {
                                         VStack {
                                             Spacer().frame(height:70).offset(y: offset.height < 70 ? -offset.height : -70).drawingGroup()
-                                            Webview(dynamicHeight: $webViewHeight, offset: $offset, selecting_tab:$selecting_tab, webview: index.webView) .disabled(selecting_tab)
+                                            Webview(dynamicHeight: $webViewHeight, offset: $offset, selecting_tab:$selecting_tab, webview: index.webView).id(index.id) .disabled(selecting_tab)
                                                 .frame(height:geometry.size.height - (24+45)).offset(y: offset.height < 70 ? -offset.height : -70)
                                         }
                                     }
@@ -107,7 +111,7 @@ struct Safari: View {
                                 } else {
                                     VStack {
                                         Spacer().frame(height:76).offset(y: offset.height < 76 ? -offset.height : -76).drawingGroup()
-                                        Webview(dynamicHeight: $webViewHeight, offset: $offset, selecting_tab:$selecting_tab, webview: index.webView) .disabled(selecting_tab)
+                                        Webview(dynamicHeight: $webViewHeight, offset: $offset, selecting_tab:$selecting_tab, webview: index.webView).id(index.id) .disabled(selecting_tab)
                                             .frame(height:geometry.size.height - (24+45)).offset(y: offset.height < 76 ? -offset.height : -76)
                                     }
                                     .shadow(color:Color.black.opacity(0.4), radius: 3, x: 0, y:4)
@@ -718,29 +722,25 @@ struct Webview : UIViewRepresentable {
 
 //Thanks to https://stackoverflow.com/questions/57459727/why-an-observedobject-array-is-not-updated-in-my-swiftui-application for this genius solution to a problem I've encountered on various projects. This let's us be notified of changes to published vars inside an array, which itself is a published var.
 class ObservableArray<T>: ObservableObject {
-    
-    
-    @Published var array:[T] = []
+    @Published var array: [T] = []
     var cancellables = [AnyCancellable]()
     
     init(array: [T]) {
         self.array = array
-        
     }
-    
-    func observeChildrenChanges<T: ObservableObject>() -> ObservableArray<T> {
-        let array2 = array as! [T]
-        array2.forEach({
-            let c = $0.objectWillChange.sink(receiveValue: { _ in self.objectWillChange.send() })
-            
-            // Important: You have to keep the returned value allocated,
-            // otherwise the sink subscription gets cancelled
+}
+
+extension ObservableArray where T: ObservableObject {
+    func observeChildrenChanges() -> ObservableArray<T> {
+        array.forEach { child in
+            let c = child.objectWillChange.sink(receiveValue: { _ in
+                self.objectWillChange.send()
+            })
+            // Keep the subscription alive
             self.cancellables.append(c)
-        })
-        return self as! ObservableArray<T>
+        }
+        return self
     }
-    
-    
 }
 
 public class WebViewStore: ObservableObject, Identifiable, Equatable {
@@ -1081,4 +1081,6 @@ struct google_search_bar: View {
 //
 //
 //
+
+
 

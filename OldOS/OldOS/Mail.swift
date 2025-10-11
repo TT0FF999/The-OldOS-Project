@@ -140,97 +140,65 @@ struct mail_add_account_view: View {
                         VStack {
                             Spacer().frame(height: 15)
                             list_section_content_only_large(current_nav_view: $current_nav_view, forward_or_backward: $forward_or_backward, content:content).onTapGesture {
-                                withAnimation(.linear(duration:0.35)) {
-                                    show_add_account = true
-                                }
+                                startExternalGoogleSignIn()
                             }
                             Spacer()
                         }
                     }
                 }
-                if show_add_account {
-                    mail_account_adder(show_add_account: $show_add_account).transition(.asymmetric(insertion: .move(edge:.bottom), removal: .move(edge:.bottom))).zIndex(1).clipped().compositingGroup()
-                }
             }.compositingGroup().clipped()
         }
     }
-}
+    func startExternalGoogleSignIn() {
+        
+        guard let app = UIApplication.shared.delegate as? AppDelegate else { return }
+        let oauth2 = app.oauth2
 
-struct mail_account_adder: View {
-    @State var account_name: String = ""
-    @State var account_email: String = ""
-    @State var account_description: String = ""
-    @State var account_password: String = ""
-    @Binding var show_add_account: Bool
-    @EnvironmentObject var EmailManager: EmailManager
-    var body: some View {
-        VStack(spacing: 0) {
-            Spacer().frame(height: 24)
-            generic_title_bar_cancel_next(title: "Gmail", cancel_action: {
-                withAnimation(.linear(duration:0.35)) {
-                    show_add_account = false
-                }
-            }, save_action: {
-                if account_email != "" && account_name != "" && account_description != "" {
-                    EmailManager.account_email = account_email
-                    EmailManager.account_name = account_name
-                    EmailManager.account_description = account_description
-                    let saveSuccessful: Bool = KeychainWrapper.standard.set(account_password, forKey: "email_password")
-                    if account_email == EmailManager.account_email && account_name == EmailManager.account_name && account_description == EmailManager.account_description && saveSuccessful {
-                        print("doing initial setup")
-                        EmailManager.do_initial_setup()
+        oauth2.authConfig.authorizeEmbedded = false
+        oauth2.authConfig.ui.useSafariView = false
+        oauth2.authConfig.authorizeContext = nil
+        
+        do {
+            let url = try oauth2.authorizeURL(params: nil)
+            
+            print("AUTH URL:", url.absoluteString)
+            DispatchQueue.main.async {
+                    UIApplication.shared.open(url, options: [:]) { ok in
+                        if !ok { print("UIApplication.open returned false") }
                     }
                 }
-            }, show_cancel: true, show_save: true).frame(height: 60)
-            ZStack {
-                settings_main_list()
-                VStack(spacing: 0) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 10).fill(Color.white).overlay(RoundedRectangle(cornerRadius: 10)
-                                                                                        .stroke(Color(red: 171/255, green: 171/255, blue: 171/255), lineWidth: 1.25))
-                        VStack(spacing:0) {
-                            ZStack {
-                                Rectangle().fill(Color.clear).frame(height:50).border_bottom(width: 1.25, edges: [.bottom], color: Color(red: 171/255, green: 171/255, blue: 171/255))
-                                HStack {
-                                    Text("Name").font(.custom("Helvetica Neue Bold", fixedSize: 18)).foregroundColor(.black).padding(.leading, 12)
-                                    TextField("John Appleseed", text: $account_name).font(.custom("Helvetica Neue Regular", fixedSize: 18)).foregroundColor(Color(red: 62/255, green: 83/255, blue: 131/255))
-                                }
-                            }.frame(height: 50)
-                            ZStack {
-                                Rectangle().fill(Color.clear).frame(height:50).border_bottom(width: 1.25, edges: [.bottom], color: Color(red: 171/255, green: 171/255, blue: 171/255))
-                                HStack {
-                                    Text("Address").font(.custom("Helvetica Neue Bold", fixedSize: 18)).foregroundColor(.black).padding(.leading, 12)
-                                    TextField("example@gmail.com", text: $account_email).font(.custom("Helvetica Neue Regular", fixedSize: 18)).keyboardType(.emailAddress).autocapitalization(.none).disableAutocorrection(true).foregroundColor(Color(red: 62/255, green: 83/255, blue: 131/255))
-                                }
-                            }.frame(height: 50)
-                            ZStack {
-                                Rectangle().fill(Color.clear).frame(height:50).border_bottom(width: 1.25, edges: [.bottom], color: Color(red: 171/255, green: 171/255, blue: 171/255))
-                                HStack {
-                                    Text("Password").font(.custom("Helvetica Neue Bold", fixedSize: 18)).foregroundColor(.black).padding(.leading, 12)
-                                    SecureField("Required", text: $account_password).font(.custom("Helvetica Neue Regular", fixedSize: 18)).keyboardType(.default).autocapitalization(.none).disableAutocorrection(true).foregroundColor(Color(red: 62/255, green: 83/255, blue: 131/255))
-                                }
-                            }.frame(height: 50)
-                            ZStack {
-                                Rectangle().fill(Color.clear).frame(height:50)
-                                HStack {
-                                    Text("Description").font(.custom("Helvetica Neue Bold", fixedSize: 18)).foregroundColor(.black).padding(.leading, 12)
-                                    TextField("My Gmail Account", text: $account_description).font(.custom("Helvetica Neue Regular", fixedSize: 18)).foregroundColor(Color(red: 62/255, green: 83/255, blue: 131/255))
-                                }
-                            }.frame(height: 50)
-                        }
-                    }.frame(height:200).padding([.leading, .trailing], 12).padding(.top, 8)
-                    Spacer().frame(height: 15)
-                    Group {
-                    Text("To sign in, please either enable less secure apps or generate an app specific password.\n") +
-                        Text("Learn more.").underline()
-                    }.multilineTextAlignment(.center).lineLimit(nil).foregroundColor(Color(red: 76/255, green: 86/255, blue: 108/255)).font(.custom("Helvetica Neue Regular", fixedSize: 15)).shadow(color: Color.white.opacity(0.9), radius: 0, x: 0.0, y: 0.9).padding([.leading, .trailing], 24).onTapGesture {
-                        guard let url = URL(string: "https://www.youtube.com/watch?v=Ee7PDsbfOUI") else { return }
-                        UIApplication.shared.open(url)
-                    }
-                    Spacer()
+            
+        } catch {
+            print("OAuth start error:", error)
+        }
+
+        oauth2.afterAuthorizeOrFail = { params, error in
+            if let error = error {
+                print("OAuth failed:", error)
+                return
+            }
+            if let idToken = oauth2.idToken, let email = emailFromIDToken(idToken) {
+                DispatchQueue.main.async {
+                    EmailManager.account_email = email
+                    EmailManager.do_initial_setup()
                 }
             }
         }
+    }
+    
+    func emailFromIDToken(_ idToken: String?) -> String? {
+        guard let id = idToken else { return nil }
+        let parts = id.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var s = String(parts[1])
+        s = s.replacingOccurrences(of: "-", with: "+")
+             .replacingOccurrences(of: "_", with: "/")
+        while s.count % 4 != 0 { s.append("=") }
+
+        guard let data = Data(base64Encoded: s),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let email = json["email"] as? String else { return nil }
+        return email
     }
 }
 
@@ -435,7 +403,21 @@ struct mail_compose_view: View {
                 mail_compose_title_bar(title: subject == "" ? "New Message" : subject, done_action: {
                                         withAnimation(.linear(duration:0.35)) {
                                             show_compose = false
-                                        }}, clear_action: {if to_address != "" {send_email()}}, show_done: true, show_clear: true, disabled: to_address == "").frame(minWidth: geometry.size.width, maxWidth: geometry.size.width, minHeight: 60, maxHeight:60).zIndex(1)
+                                        }}, clear_action: {if to_address != "" {EmailManager.sendEmail(to: [to_address], cc: [cc_address],bcc: [bcc_address], subject: subject, bodyPlain: content) {
+                                            result in
+                                                switch result {
+                                                case .success:
+                                                    withAnimation(.linear(duration:0.35)) {
+                                                        show_compose = false
+                                                    }
+                                                    print("Email sent successfully!")
+                                                case .failure(let error):
+                                                    withAnimation(.linear(duration:0.35)) {
+                                                        show_compose = false
+                                                    }
+                                                    print("Failed to send email: \(error.localizedDescription)")
+                                                }
+                                        }}}, show_done: true, show_clear: true, disabled: to_address == "").frame(minWidth: geometry.size.width, maxWidth: geometry.size.width, minHeight: 60, maxHeight:60).zIndex(1)
                 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -492,38 +474,6 @@ struct mail_compose_view: View {
             }.frame(width: geometry.size.width, height: geometry.size.height)
         }
     }
-    func send_email() {
-        var smtp_session: MCOSMTPSession = MCOSMTPSession()
-        smtp_session.hostname = "smtp.gmail.com"
-        smtp_session.username = EmailManager.account_email
-        smtp_session.port = 465
-        smtp_session.password = KeychainWrapper.standard.string(forKey: "email_password")
-        smtp_session.authType = .saslPlain
-        smtp_session.connectionType = MCOConnectionType.TLS
-        var builder = MCOMessageBuilder()
-        builder.header.from = MCOAddress(displayName: EmailManager.account_email, mailbox: EmailManager.account_email)
-        builder.header.to = [MCOAddress(mailbox: to_address)]
-        if bcc_address != "" {
-            builder.header.bcc = [MCOAddress(mailbox: bcc_address)]
-        }
-        if cc_address != "" {
-            builder.header.cc = [MCOAddress(mailbox: cc_address)]
-        }
-        builder.header.subject = subject
-        builder.textBody = content
-        var message_data = builder.data() ?? Data()
-        var send_operation: MCOSMTPSendOperation = smtp_session.sendOperation(with: message_data)
-        withAnimation(.linear(duration:0.35)) {
-            show_compose = false
-        }
-        send_operation.start {(error) in
-            if (error != nil) {
-                print(error)
-            } else {
-                print("Successfully sent email")
-            }
-        }
-    }
 }
 
 struct mail_compose_textview: UIViewRepresentable {
@@ -535,12 +485,11 @@ struct mail_compose_textview: UIViewRepresentable {
         let textView = UITextView()
         textView.font = UIFont(name: "HelveticaNeue", size: 15.5)
         textView.textColor = .black
-        //  textView.isSelectable = true
         textView.isUserInteractionEnabled = true
         textView.delegate = context.coordinator
         textView.isScrollEnabled = false
         textView.translatesAutoresizingMaskIntoConstraints = false
-        textView.widthAnchor.constraint(equalToConstant: geometry.size.width).isActive = true //<--- Here
+        textView.widthAnchor.constraint(equalToConstant: geometry.size.width).isActive = true
         return textView
     }
     
@@ -760,7 +709,7 @@ struct mail_body_view: View {
                         if webViewHeight < geometry.size.height { //there  needs to be more math for this, but thats for another time
                             Color.white.frame(width: geometry.size.width, height: geometry.size.height)
                         }
-                        WebViewEmail(message: message, imap_session: EmailManager.imap_session, geometry: geometry, webViewHeight: $webViewHeight).frame(minWidth: geometry.size.width, maxWidth: geometry.size.width, minHeight: webViewHeight, maxHeight: webViewHeight)
+                        WebViewEmail(message: message, folder: "INBOX", imap_session: EmailManager.imap_session, geometry: geometry, webViewHeight: $webViewHeight).frame(minWidth: geometry.size.width, maxWidth: geometry.size.width, minHeight: webViewHeight, maxHeight: webViewHeight)
                     }
                     
                 }.clipped().shadow(color: Color.black.opacity(0.65), radius: 8, x: 0, y: 0)
@@ -917,85 +866,112 @@ struct mail_title_bar : View {
 }
 
 struct WebViewEmail: UIViewRepresentable {
-    var message: MCOIMAPMessage
-    var imap_session: MCOIMAPSession
-    var geometry: GeometryProxy
+    let message: MCOIMAPMessage
+    let folder: String
+    let imap_session: MCOIMAPSession
+    let geometry: GeometryProxy
     @Binding var webViewHeight: CGFloat
-    var webView: WKWebView?
-    init(message: MCOIMAPMessage, imap_session: MCOIMAPSession, geometry: GeometryProxy, webViewHeight: Binding<CGFloat>) {
-        self.message = message
-        self.imap_session = imap_session
-        self.geometry = geometry
-        _webViewHeight = webViewHeight
-        let jscript = "var meta = document.createElement('meta'); meta.setAttribute('name', 'viewport'); meta.setAttribute('content', 'width=\(geometry.size.width)'); document.getElementsByTagName('head')[0].appendChild(meta);" //make this better for images
-        let userScript = WKUserScript(source: jscript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        let wkUController = WKUserContentController()
-        wkUController.addUserScript(userScript)
-        let wkWebConfig = WKWebViewConfiguration()
-        wkWebConfig.userContentController = wkUController
-        webView = WKWebView(frame: CGRect(geometry.size.width, geometry.size.height), configuration: wkWebConfig)
-        webView?.scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        webView?.contentMode = .scaleAspectFit
-        webView?.scrollView.isScrollEnabled = false
-        webView?.scrollView.minimumZoomScale = 1.0
-        webView?.scrollView.maximumZoomScale = 1.0
-    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
     func makeUIView(context: Context) -> WKWebView {
-        webView?.navigationDelegate = context.coordinator
-        webView?.scrollView.delegate = context.coordinator
-        return webView ?? WKWebView() // Just make a new WKWebView, we don't need to do anything else here.
+        let jscript = """
+        var meta=document.createElement('meta');
+        meta.name='viewport'; meta.content='width=\(Int(geometry.size.width))';
+        document.head.appendChild(meta);
+        var style=document.createElement('style');
+        style.innerHTML='img{max-width:100%;height:auto} body{font-family:Helvetica,Arial,sans-serif;margin:8px} pre{white-space:pre-wrap}';
+        document.head.appendChild(style);
+        """
+        let userScript = WKUserScript(source: jscript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        let uctrl = WKUserContentController()
+        uctrl.addUserScript(userScript)
+
+        let cfg = WKWebViewConfiguration()
+        cfg.userContentController = uctrl
+
+        let web = WKWebView(frame: CGRect(x: 0, y: 0, width: geometry.size.width, height: 1), configuration: cfg)
+        web.scrollView.isScrollEnabled = false
+        web.navigationDelegate = context.coordinator
+        web.scrollView.delegate = context.coordinator
+        web.loadHTMLString("<em style='color:#666'>Loading…</em>", baseURL: nil)
+        return web
     }
-    
-    func updateUIView(_ uiView: WKWebView, context: Context) {
-        fetch()
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        context.coordinator.loadUrgentIfNeeded(into: webView)
     }
-    func fetch() {
-        let fetchOperation : MCOIMAPFetchParsedContentOperation = imap_session.fetchParsedMessageOperation(withFolder: "INBOX", uid: UInt32(message.uid ?? 0))
-        fetchOperation.start {(error, parser) in 
-            webView?.loadHTMLString((parser?.htmlBodyRendering() ?? ""), baseURL: nil)
-            //   webView?.contentMode = .scaleAspectFit
+
+    final class Coordinator: NSObject, WKNavigationDelegate, UIScrollViewDelegate {
+        let parent: WebViewEmail
+        var parsedOp: MCOIMAPFetchParsedContentOperation?
+        var didStartForUID: UInt32 = 0
+
+        init(_ parent: WebViewEmail) { self.parent = parent }
+
+        func loadUrgentIfNeeded(into web: WKWebView) {
+            guard didStartForUID != parent.message.uid else { return }
+            didStartForUID = parent.message.uid
+
+            parsedOp?.cancel()
+            parsedOp = nil
+
+            let op = parent.imap_session.fetchParsedMessageOperation(
+                withFolder: parent.folder,
+                uid: parent.message.uid,
+                urgent: true
+            )
+
+            parsedOp = op
+            op?.start { [weak self] (error: Error?, parser: MCOMessageParser?) in
+                guard let self else { return }
+                if let error {
+                    DispatchQueue.main.async {
+                        web.loadHTMLString("<pre>\(Self.escape(error.localizedDescription))</pre>", baseURL: nil)
+                    }
+                    return
+                }
+                guard let parser else {
+                    DispatchQueue.main.async {
+                        web.loadHTMLString("<em style='color:#666'>No content</em>", baseURL: nil)
+                    }
+                    return
+                }
+
+                var html = parser.htmlBodyRendering()
+                if (html?.isEmpty ?? true) {
+                    let plain = parser.plainTextRendering()
+                    html = "<pre>\(Self.escape(plain ?? ""))</pre>"
+                }
+
+                DispatchQueue.main.async {
+                    web.loadHTMLString(html ?? "", baseURL: nil)
+                }
+            }
         }
-    }
-    class Coordinator: NSObject, WKNavigationDelegate, UIScrollViewDelegate {
-        var parent: WebViewEmail
-        
-        init(_ parent: WebViewEmail) {
-            self.parent = parent
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            webView.evaluateJavaScript("document.body.scrollHeight") { [weak self] result, _ in
+                guard let self else { return }
+                if let n = result as? NSNumber {
+                    self.parent.webViewHeight = CGFloat(truncating: n)
+                }
+            }
         }
-        public func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+
+        func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
             scrollView.pinchGestureRecognizer?.isEnabled = false
         }
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            let changeFontFamilyScript = "document.getElementsByTagName(\'body\')[0].style.fontFamily = \"Helvetica, sans-serif\";"
-            webView.evaluateJavaScript(changeFontFamilyScript) { (response, error) in
-                debugPrint("Am here")
-            }
-            webView.evaluateJavaScript("document.readyState", completionHandler: { (complete, error) in
-                if complete != nil {
-                    webView.evaluateJavaScript("document.body.scrollWidth", completionHandler: { (width, error) in
-                        if (width as? CGFloat ?? self.parent.geometry.size.width) > self.parent.geometry.size.width + 20 {
-                            webView.evaluateJavaScript("document.documentElement.outerHTML", completionHandler: { (html, error) in
-                                webView.loadHTMLString((html as? String ?? "").HTMLImageCorrector(), baseURL: nil)
-                            })
-                        }
-                    })
-                    webView.evaluateJavaScript("document.body.scrollHeight", completionHandler: { (height, error) in
-                        self.parent.webView?.frame.size.height = height as? CGFloat ?? 0
-                        self.parent.webViewHeight = height as? CGFloat ?? 0
-                        self.parent.webView?.setNeedsDisplay()
-                    })
-                }
-                
-            })
+
+        private static func escape(_ s: String) -> String {
+            s.replacingOccurrences(of: "&", with: "&amp;")
+             .replacingOccurrences(of: "<", with: "&lt;")
+             .replacingOccurrences(of: ">", with: "&gt;")
         }
-        
-    }
-    
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
     }
 }
+
+
 
 struct WebViewEmailOther: UIViewRepresentable {
     var message: MCOIMAPMessage
@@ -1026,7 +1002,7 @@ struct WebViewEmailOther: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         webView?.navigationDelegate = context.coordinator
         webView?.scrollView.delegate = context.coordinator
-        return webView ?? WKWebView() // Just make a new WKWebView, we don't need to do anything else here.
+        return webView ?? WKWebView()
     }
     
     func updateUIView(_ uiView: WKWebView, context: Context) {
@@ -1100,7 +1076,6 @@ extension String {
 }
 
 struct mail_inbox_view: View {
-    ///5.25
     @State var search: String = ""
     @State var editing_state: String = "None"
     @State var refersh_text: Bool = false
@@ -1158,7 +1133,6 @@ struct mail_inbox_view: View {
 }
 
 struct mail_other_mailbox_view: View {
-    ///5.25
     @Binding var selected_mailbox: mail_folder_item
     @State var search: String = ""
     @State var editing_state: String = "None"
@@ -1387,6 +1361,47 @@ class Body_Placeholder_Other:ObservableObject {
     }
 }
 
+struct SignInSheet: View {
+    @EnvironmentObject var email: EmailManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var authInFlight = false
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Sign in to Gmail").font(.title2).bold()
+            Text("We’ll open a secure Google window.")
+                .multilineTextAlignment(.center)
+
+            Button(authInFlight ? "Opening…" : "Continue with Google") {
+                startAuth()
+            }
+            .disabled(authInFlight)
+            .buttonStyle(.borderedProminent)
+        }
+        .padding()
+        .onAppear { if !authInFlight { startAuth() } }
+    }
+
+    private func startAuth() {
+        guard !authInFlight else { return }
+        authInFlight = true
+        dismiss()
+        debugOAuth(email.oauth2)
+        let ctx = email.oauth2.authConfig.authorizeContext
+        print("authorizeContext:", String(describing: ctx))
+        email.oauth2.authorize { _, error in
+            DispatchQueue.main.async {
+                authInFlight = false
+                if let error = error {
+                    print("OAuth authorize error:", error)
+                    return
+                }
+                email.do_initial_setup()
+            }
+        }
+    }
+}
+
 extension Subscribers.Completion {
     func error() throws -> Failure {
         if case let .failure(error) = self {
@@ -1399,53 +1414,84 @@ extension Subscribers.Completion {
 
 typealias Account = (email: String, name: String, description: String)
 
-class EmailManager: ObservableObject {
-    
+final class EmailManager: ObservableObject {
+
     @Published var emails: [MCOIMAPMessage] = []
     @Published var token: String = ""
     @Published var total_email_quantity = 0
     @Published var total_unread_quantity = 0
-    @Published var download_progress:CGFloat = 0
+    @Published var download_progress: CGFloat = 0
     @Published var download_quantity = 1
     @Published var downloaded_number = 0
     @Published var hide_downloader: Bool = true
     @Published var show_checking: Bool = false
-    @Published var folders: [mail_folder_item] = [mail_folder_item(name: "Inbox", image: "inmbox", path: "INBOX"), mail_folder_item(name: "Drafts", image: "draftsmbox", path: "[Gmail]/Drafts"), mail_folder_item(name: "Sent Mail", image: "sentmbox", path: "[Gmail]/Sent Mail"), mail_folder_item(name: "Trash", image: "trashmbox", path: "[Gmail]/Trash")]
+    @Published var folders: [mail_folder_item] = [
+        mail_folder_item(name: "Inbox",     image: "inmbox",   path: "INBOX"),
+        mail_folder_item(name: "Drafts",    image: "draftsmbox", path: "[Gmail]/Drafts"),
+        mail_folder_item(name: "Sent Mail", image: "sentmbox", path: "[Gmail]/Sent Mail"),
+        mail_folder_item(name: "Trash",     image: "trashmbox", path: "[Gmail]/Trash")
+    ]
     var did_initial_fetch: Bool = false
+
     @Published var last_updated_date: Date = UserDefaults.standard.object(forKey: "mail_last_updated_date") as? Date ?? Date() {
-        didSet {
-            UserDefaults.standard.set(last_updated_date, forKey: "mail_last_updated_date")
-        }
+        didSet { UserDefaults.standard.set(last_updated_date, forKey: "mail_last_updated_date") }
     }
     @Published var account_email: String = UserDefaults.standard.object(forKey: "mail_account_email") as? String ?? "" {
-        didSet {
-            UserDefaults.standard.set(account_email, forKey: "mail_account_email")
-        }
+        didSet { UserDefaults.standard.set(account_email, forKey: "mail_account_email") }
     }
     @Published var account_name: String = UserDefaults.standard.object(forKey: "mail_account_name") as? String ?? "" {
-        didSet {
-            UserDefaults.standard.set(account_name, forKey: "mail_account_name")
-        }
+        didSet { UserDefaults.standard.set(account_name, forKey: "mail_account_name") }
     }
     @Published var account_description: String = UserDefaults.standard.object(forKey: "mail_account_description") as? String ?? "" {
-        didSet {
-            UserDefaults.standard.set(account_description, forKey: "mail_account_description")
-        }
+        didSet { UserDefaults.standard.set(account_description, forKey: "mail_account_description") }
     }
     
+    private var idleOperation: MCOIMAPIdleOperation?
+
     var imap_session = MCOIMAPSession()
     var imap_fetch_session = MCOIMAPSession()
-    init() {
+
+    let oauth2: OAuth2CodeGrant
+
+    init(oauth2:OAuth2CodeGrant) {
+        self.oauth2 = oauth2
         if account_email != "" {
-            fixMCVOIPfor16()
-            setup_imap_session()
-            load_email_cache()
-            setup_mailcore_idle_operation()
-            get_unread_count()
-            fetch_folders()
+            print(account_email)
+            withFreshAccessToken { token in
+                print(token)
+                guard let token else {
+                    print("EmailManager: no token yet. Trigger sign-in first.")
+                    return
+                }
+                self.configureIMAPSessions(with: token)
+                self.load_email_cache()
+                self.setup_mailcore_idle_operation()
+                self.get_unread_count()
+                self.fetch_folders()
+            }
         }
     }
     
+    func suspendBackgroundMailOps() {
+        idleOperation?.interruptIdle()
+        imap_fetch_session.cancelAllOperations()
+    }
+
+    func resumeBackgroundMailOps() {
+        setup_mailcore_idle_operation()
+    }
+
+    func do_initial_setup() {
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.configureIMAPSessions(with: token)
+            self.load_email_cache()
+            self.setup_mailcore_idle_operation()
+            self.get_unread_count()
+            self.fetch_folders()
+        }
+    }
+
     func fixMCVOIPfor16() {
         if imap_session.responds(to: Selector(("setVoIPEnabled:"))) {
             imap_session.setValue(false, forKey: "voIPEnabled")
@@ -1458,317 +1504,386 @@ class EmailManager: ObservableObject {
             imap_fetch_session.isVoIPEnabled = false
         }
     }
-    
-    func do_initial_setup() {
-        self.setup_imap_session()
-        self.load_email_cache()
-        self.setup_mailcore_idle_operation()
-        self.get_unread_count()
-        self.fetch_folders()
+
+    private func withFreshAccessToken(_ cb: @escaping (String?) -> Void) {
+        if oauth2.hasUnexpiredAccessToken() {
+            cb(oauth2.accessToken)
+            return
+        }
+        if oauth2.refreshToken != nil {
+            oauth2.doRefreshToken { _, error in
+                if let error { print("OAuth refresh error: \(error)") }
+                DispatchQueue.main.async { cb(error == nil ? self.oauth2.accessToken : nil) }
+            }
+        } else {
+            cb(nil)
+        }
     }
-    
+
+    private func configureIMAPSessions(with accessToken: String) {
+        imap_session = MCOIMAPSession()
+        fixMCVOIPfor16()
+        imap_session.hostname = "imap.gmail.com"
+        imap_session.username = account_email
+        imap_session.port = 993
+        imap_session.connectionType = .TLS
+        imap_session.authType = .xoAuth2
+        imap_session.oAuth2Token = accessToken
+        imap_session.connectionLogger = { (connectionID, type, data) in
+            if let data, let s = String(data: data, encoding: .utf8) {
+                print("IMAP[\(connectionID)]: \(s)")
+            }
+        }
+        imap_session.allowsFolderConcurrentAccessEnabled = true
+
+        imap_fetch_session = MCOIMAPSession()
+        fixMCVOIPfor16()
+        imap_fetch_session.hostname = "imap.gmail.com"
+        imap_fetch_session.username = account_email
+        imap_fetch_session.port = 993
+        imap_fetch_session.connectionType = .TLS
+        imap_fetch_session.authType = .xoAuth2
+        imap_fetch_session.oAuth2Token = accessToken
+        imap_fetch_session.allowsFolderConcurrentAccessEnabled = true
+    }
+
+    private func reconfigureOnAuthFailure() {
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.configureIMAPSessions(with: token)
+            self.setup_mailcore_idle_operation()
+        }
+    }
+
     func load_email_cache() {
         do {
-            let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("emails")
+            let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("emails")
             let data = try Data(contentsOf: path)
-            var temp_email_holder: [MCOIMAPMessage] = try NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(data) as? [MCOIMAPMessage] ?? []
+            let temp_email_holder: [MCOIMAPMessage] =
+                (try NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(data) as? [MCOIMAPMessage]) ?? []
             self.emails = temp_email_holder
             fetch_most_recent_emails()
         } catch {
             fetch_most_recent_emails()
-            print("ERROR: \(error.localizedDescription)")
+            print("Cache load error: \(error.localizedDescription)")
         }
     }
-    
+
     func fetch_folders() {
-        let allFoldersOperation: MCOIMAPFetchFoldersOperation = self.imap_session.fetchAllFoldersOperation()
-        print("called fetch folders")
-        allFoldersOperation.start {(error, folders) in
-            print("In start fetch folders")
-            for folder in (folders ?? []).filter({($0.path ?? "") != "[Gmail]"}).filter({($0.path ?? "") != "[Gmail]/All Mail"}) {
-                print("got folder", folder.path ?? "")
-                if !self.folders.map({$0.path}).contains(folder.path ?? "") {
-                    self.folders.append(mail_folder_item(name: (folder.path ?? "").replacingOccurrences(of: "[Gmail]/", with: ""), image: "mailbox", path: folder.path ?? ""))
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.imap_session.oAuth2Token = token
+
+            let op = self.imap_session.fetchAllFoldersOperation()
+            op?.start { error, rawFolders in
+                if let error {
+                    print("fetch_folders error: \(error)")
+                    return
+                }
+                guard let folders = rawFolders as? [MCOIMAPFolder] else {
+                    print("fetch_folders: unexpected folders type")
+                    return
+                }
+
+                let filtered = folders.filter { f in
+                    let p = f.path ?? ""
+                    return p != "[Gmail]" && p != "[Gmail]/All Mail"
+                }
+
+                DispatchQueue.main.async {
+                    for f in filtered {
+                        let path = f.path ?? ""
+                        if !self.folders.map({ $0.path }).contains(path) {
+                            let name = path.replacingOccurrences(of: "[Gmail]/", with: "")
+                            self.folders.append(
+                                mail_folder_item(name: name, image: "mailbox", path: path)
+                            )
+                        }
+                    }
                 }
             }
         }
-
     }
-    
-    
+
+
     func setup_mailcore_idle_operation() {
-        self.imap_fetch_session = MCOIMAPSession()
-        if imap_fetch_session.responds(to: Selector(("setVoIPEnabled:"))) {
-            imap_fetch_session.setValue(false, forKey: "voIPEnabled")
-        } else {
-            imap_fetch_session.isVoIPEnabled = false
-        }
-        self.imap_fetch_session.hostname = "imap.gmail.com"
-        self.imap_fetch_session.username = self.account_email
-        self.imap_fetch_session.password = KeychainWrapper.standard.string(forKey: "email_password")
-        self.imap_fetch_session.authType = .saslPlain
-        self.imap_fetch_session.port = 993
-        self.imap_fetch_session.connectionType = MCOConnectionType.TLS
-        let idle_operation: MCOIMAPIdleOperation = self.imap_fetch_session.idleOperation(withFolder: "INBOX", lastKnownUID: UInt32(self.emails.last?.uid ?? 0))
-        idle_operation.start { error in
-            if (error == nil) {
-                let statusOperation: MCOIMAPFolderInfoOperation = self.imap_fetch_session.folderInfoOperation("INBOX")
-                statusOperation.start { (err, status) -> Void in
-                    let uids : MCOIndexSet = MCOIndexSet(range: MCORangeMake(UInt64(self.emails.last?.uid ?? 0) + 1, UINT64_MAX)) //this should be .first
-                    let requestKind:MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
-                    let fetchOperation : MCOIMAPFetchMessagesOperation = self.imap_fetch_session.fetchMessagesOperation(withFolder: "INBOX", requestKind: requestKind, uids: uids)
-                    let pre_fetchOperation : MCOIMAPFetchMessagesOperation = self.imap_fetch_session.fetchMessagesOperation(withFolder: "INBOX", requestKind: requestKind, uids: uids)
-                    pre_fetchOperation.start {  (err, msg, vanished) -> Void in
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.imap_fetch_session.oAuth2Token = token
+
+            let idle_operation = self.imap_fetch_session.idleOperation(
+                withFolder: "INBOX",
+                lastKnownUID: UInt32(self.emails.last?.uid ?? 0)
+            )
+            idle_operation?.start { error in
+                if let error {
+                    print("IDLE error: \(error)")
+                    self.reconfigureOnAuthFailure()
+                    return
+                }
+                let statusOperation = self.imap_fetch_session.folderInfoOperation("INBOX")
+                statusOperation?.start { (_, _) in
+                    let startUID = UInt64(self.emails.last?.uid ?? 0) + 1
+                    let uids = MCOIndexSet(range: MCORangeMake(startUID, 50))
+                    let requestKind: MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
+
+                    let pre = self.imap_fetch_session.fetchMessagesOperation(withFolder: "INBOX",
+                                                                             requestKind: requestKind,
+                                                                             uids: uids)
+                    pre?.start { (_, msg, _) in
                         self.download_quantity = msg?.count ?? 1
-                        if msg?.count != 0 {
+                        if (msg?.count ?? 0) != 0 {
                             self.hide_downloader = false
                             self.show_checking = true
                         }
-                        fetchOperation.start { (err, msg, vanished) -> Void in
-                            print("error from server \(err)")
-                            print("fetched \(msg?.count) messages")
+
+                        let fetch = self.imap_fetch_session.fetchMessagesOperation(withFolder: "INBOX",
+                                                                                   requestKind: requestKind,
+                                                                                   uids: uids)
+                        fetch?.start { (err, msg, _) in
+                            if let err { print("IDLE fetch error: \(err)") }
                             for message in msg ?? [] {
-                                if !self.emails.map{$0.uid}.contains(message.uid) {
+                                if !self.emails.map({ $0.uid }).contains(message.uid) {
                                     self.emails.append(contentsOf: msg ?? [])
-                                } else {
-                                    if let idx = self.emails.firstIndex(where: {$0.uid == message.uid}) {
-                                        if self.emails[idx].flags != message.flags {
-                                            self.emails[idx].flags = message.flags
-                                        }
+                                } else if let idx = self.emails.firstIndex(where: { $0.uid == message.uid }) {
+                                    if self.emails[idx].flags != message.flags {
+                                        self.emails[idx].flags = message.flags
                                     }
                                 }
                             }
                         }
                         self.last_updated_date = Date()
-                        fetchOperation.progress = { (current: UInt32) in
+                        pre?.progress = { _ in }
+
+                        fetch?.progress = { (current: UInt32) in
                             self.show_checking = false
                             self.downloaded_number = Int(current)
-                            withAnimation() {
-                                self.download_progress = CGFloat(self.downloaded_number)/CGFloat(self.download_quantity)
+                            withAnimation {
+                                self.download_progress = CGFloat(self.downloaded_number) / CGFloat(self.download_quantity)
                                 if self.download_progress == 1 {
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                                         self.hide_downloader = true
                                         self.download_quantity = 0
                                         self.download_progress = 0
                                         self.downloaded_number = 1
-                                    })
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    func perform_refresh_emails() {
-        let statusOperation: MCOIMAPFolderInfoOperation = self.imap_session.folderInfoOperation("INBOX")
-        statusOperation.start { (err, status) -> Void in
-            self.total_email_quantity = Int(status?.messageCount ?? 0)
-            let folder : String = "INBOX"
-            let uids : MCOIndexSet = MCOIndexSet(range: MCORange(location: UInt64(self.emails.last?.uid ?? 0), length: UINT64_MAX))
-            let requestKind:MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
-            let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("emails")
-            var quantity: UInt32 = 0
-            let fetchOperation : MCOIMAPFetchMessagesOperation = self.imap_session.syncMessages(withFolder: "INBOX", requestKind: requestKind, uids: uids, modSeq: UInt64(self.emails.last?.modSeqValue ?? 0))
-            let pre_fetchOperation : MCOIMAPFetchMessagesOperation = self.imap_session.syncMessages(withFolder: "INBOX", requestKind: requestKind, uids: uids, modSeq: UInt64(self.emails.last?.modSeqValue ?? 0))
-            pre_fetchOperation.start {  (err, msg, vanished) -> Void in
-                self.download_quantity = msg?.count ?? 1
-                if msg?.count != 0 {
-                    self.hide_downloader = false
-                    self.show_checking = true
-                }
-                fetchOperation.start { (err, msg, vanished) -> Void in
-                    print("error from server \(err)")
-                    print("fetched \(msg?.count) messages")
-                    for message in msg ?? [] {
-                        if !self.emails.map{$0.uid}.contains(message.uid) {
-                            if !message.flags.contains(.deleted) {
-                                self.emails.append(message)
-                                if self.emails.count >= 50 {
-                                    self.emails.removeFirst()
-                                }
-                            }
-                            else {
-                                if let idx = self.emails.firstIndex(where: {$0.uid == message.uid}) {
-                                    self.emails[idx] = message
-                                }
-                            }
-                        }
-                    }
-                }
-                fetchOperation.progress = { (current: UInt32) in
-                    self.show_checking = false
-                    self.downloaded_number = Int(current)
-                    withAnimation() {
-                        self.download_progress = CGFloat(self.downloaded_number)/CGFloat(self.download_quantity)
-                        if self.download_progress == 1 {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: {
-                                self.hide_downloader = true
-                                self.download_quantity = 0
-                                self.download_progress = 0
-                                self.downloaded_number = 1
-                            })
-                        }
-                    }
-                }
-                self.last_updated_date = Date()
-            }
-        }
-    }
-    
-    
-    func fetch_most_recent_emails() {
-        let statusOperation: MCOIMAPFolderInfoOperation = self.imap_session.folderInfoOperation("INBOX")
-        statusOperation.start { (err, status) -> Void in
-            print("called progress",status?.uidNext, self.emails.last?.uid)
-            self.total_email_quantity = Int(status?.messageCount ?? 0)
-            if (self.emails.last?.uid ?? 0) + 1 < status?.uidNext ?? 0 {
-                let folder : String = "INBOX"
-//                let min_range = UInt64(((status?.uidNext ?? 0) - 50 < 0 ? 0 : (status?.uidNext ?? 0) - 50)) //changed from 50 to 64
-//                let max_range = UInt64(status?.uidNext ?? 0)
-//                if min_range != max_range {
-                let uids : MCOIndexSet = MCOIndexSet(range: MCORange(location: UInt64((status?.messageCount ?? 0) < 49 ? 0 : (status?.messageCount ?? 49) - 49), length: 50))
-                    let requestKind:MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
-                    let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("emails")
-                    var quantity: UInt32 = 0
-                    let fetchOperation : MCOIMAPFetchMessagesOperation = self.imap_session.fetchMessagesByNumberOperation(withFolder: "INBOX", requestKind: requestKind, numbers: uids)
-                    let pre_fetchOperation : MCOIMAPFetchMessagesOperation = self.imap_session.fetchMessagesByNumberOperation(withFolder: "INBOX", requestKind: requestKind, numbers: uids)
-                    pre_fetchOperation.start {  (err, msg, vanished) -> Void in
-                        self.download_quantity = msg?.count ?? 1
-                        self.hide_downloader = false
-                        self.show_checking = true
-                        fetchOperation.start { (err, msg, vanished) -> Void in
-                            print("error from server \(err)")
-                            print("fetched \(msg?.count) messages")
-                            for message in msg ?? [] {
-                                if !self.emails.map{$0.uid}.contains(message.uid) {
-                                    if !message.flags.contains(.deleted) {
-                                        self.emails.append(message)
-                                        if self.emails.count >= 50 {
-                                            self.emails.removeFirst()
-                                        }
-                                    }
-                                    else {
-                                        if let idx = self.emails.firstIndex(where: {$0.uid == message.uid}) {
-                                            self.emails[idx] = message
-                                        }
                                     }
                                 }
                             }
                         }
-                        fetchOperation.progress = { (current: UInt32) in
-                            self.show_checking = false
-                            self.downloaded_number = Int(current)
-                            withAnimation() {
-                                self.download_progress = CGFloat(self.downloaded_number)/CGFloat(self.download_quantity)
-                                if self.download_progress == 1 {
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: {
-                                        self.hide_downloader = true
-                                        self.download_quantity = 0
-                                        self.download_progress = 0
-                                        self.downloaded_number = 1
-                                    })
-                                }
-                            }
-                        }
-                        self.last_updated_date = Date()
                     }
-               // }
+                }
             }
         }
     }
-    
+
+    func get_unread_count() {
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.imap_session.oAuth2Token = token
+
+            let op = self.imap_session.folderStatusOperation("INBOX")
+            op?.start { (_, status) in
+                self.total_unread_quantity = Int(status?.unseenCount ?? 0)
+            }
+        }
+    }
+
+    func perform_refresh_emails(batchSize: UInt64 = 50) {
+        withFreshAccessToken { token in
+            guard let token else { return }
+
+            self.imap_session.authType = .xoAuth2
+            self.imap_session.username = self.account_email
+            self.imap_session.oAuth2Token = token
+
+            let infoOp = self.imap_session.folderInfoOperation("INBOX")
+            infoOp?.start { [weak self] (_, info) in
+                guard let self = self, let info = info else { return }
+
+                self.total_email_quantity = Int(info.messageCount)
+                let serverUidNext = info.uidNext
+                let localMaxUID: UInt32 = self.emails.reduce(0) { max($0, $1.uid) }
+
+                guard serverUidNext > localMaxUID + 1 else {
+                    self.last_updated_date = Date()
+                    return
+                }
+
+                let deltaCount = UInt64(serverUidNext - (localMaxUID + 1))
+                let length = min(batchSize, deltaCount)
+                let start  = UInt64(localMaxUID + 1)
+
+                let uids = MCOIndexSet(range: MCORange(location: start, length: length))
+                
+                guard let uids = uids else {return}
+                
+                self.fetchAndMerge(uids: uids)
+            }
+        }
+    }
+
+    func fetch_most_recent_emails(batchSize: UInt64 = 50) {
+        withFreshAccessToken { token in
+            guard let token else { return }
+
+            self.imap_session.authType = .xoAuth2
+            self.imap_session.username = self.account_email
+            self.imap_session.oAuth2Token = token
+
+            let infoOp = self.imap_session.folderInfoOperation("INBOX")
+            infoOp?.start { [weak self] (_, info) in
+                guard let self = self, let info = info else { return }
+
+                self.total_email_quantity = Int(info.messageCount)
+                let serverUidNext = info.uidNext
+
+                let localMaxUID = self.emails.reduce(UInt32(0)) { max($0, $1.uid) }
+
+                if localMaxUID == 0 {
+                    let total = serverUidNext > 0 ? UInt64(serverUidNext - 1) : 0
+                    guard total > 0 else { return }
+
+                    let length: UInt64 = min(batchSize, total)
+                    let start = UInt64(serverUidNext) - length
+                    let uids = MCOIndexSet(range: MCORange(location: start, length: length))
+                    
+                    guard let uids = uids else {return}
+
+                    self.fetchAndMerge(uids: uids)
+                    return
+                }
+
+                if serverUidNext <= localMaxUID + 1 {
+                    return
+                }
+
+                let deltaCount = UInt64(serverUidNext - (localMaxUID + 1))
+                let length = min(batchSize, deltaCount)
+                let start = UInt64(localMaxUID + 1)
+                let uids = MCOIndexSet(range: MCORange(location: start, length: length))
+                
+                guard let uids = uids else {return}
+
+                self.fetchAndMerge(uids: uids)
+            }
+        }
+    }
+
+    private func fetchAndMerge(uids: MCOIndexSet) {
+        self.hide_downloader = false
+        self.show_checking = true
+        self.download_quantity = Int(uids.count())
+
+        let kind: MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .structure, .flags]
+        let op = self.imap_session.fetchMessagesOperation(withFolder: "INBOX", requestKind: kind, uids: uids)
+
+        op?.start { [weak self] (err, msgs, _) in
+            guard let self = self else { return }
+            if let err = err { print("fetchAndMerge error:", err); }
+
+            let bound = 200
+            let incoming = (msgs ?? []).filter { !$0.flags.contains(.deleted) }
+
+            var existingUIDs = Set(self.emails.map { $0.uid })
+
+            for m in incoming.sorted(by: { $0.uid < $1.uid }) {
+                if !existingUIDs.contains(m.uid) {
+                    self.emails.append(m)
+                    existingUIDs.insert(m.uid)
+                } else if let idx = self.emails.firstIndex(where: { $0.uid == m.uid }) {
+                    if self.emails[idx].flags != m.flags {
+                        self.emails[idx].flags = m.flags
+                    }
+                }
+            }
+
+            if self.emails.count > bound {
+                self.emails.sort(by: { $0.uid < $1.uid })
+                self.emails = Array(self.emails.suffix(bound))
+            }
+
+            self.show_checking = false
+            self.last_updated_date = Date()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                self.hide_downloader = true
+                self.download_quantity = 0
+                self.download_progress = 0
+                self.downloaded_number = 0
+            }
+        }
+
+        op?.progress = { [weak self] (current: UInt32) in
+            guard let self = self, self.download_quantity > 0 else { return }
+            self.downloaded_number = Int(current)
+            withAnimation {
+                self.download_progress = CGFloat(self.downloaded_number) / CGFloat(self.download_quantity)
+            }
+        }
+    }
+
+
     func fetch_past_emails() {
-        let statusOperation: MCOIMAPFolderStatusOperation = self.imap_session.folderStatusOperation("INBOX")
-        statusOperation.start { (err, status) -> Void in
-            let folder : String = "INBOX"
-            var computed_uid = Int(self.emails.first?.uid ?? 0) - 26 <= 0 ? 1 : (self.emails.first?.uid ?? 0) - 26
-            let min_range: UInt64 = UInt64(computed_uid)
-            let max_range: UInt64 = UInt64(self.emails.first?.uid ?? 0)
-            if min_range != max_range {
-                let uids : MCOIndexSet = MCOIndexSet(range: MCORange(location: min_range, length: 25))
-                let requestKind:MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
-                let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("emails")
-                var quantity: UInt32 = 0
-                var temp_email_holder: [MCOIMAPMessage] = []
-                let fetchOperation : MCOIMAPFetchMessagesOperation = self.imap_session.fetchMessagesOperation(withFolder: folder, requestKind: requestKind, uids: uids)
-                fetchOperation.start { (err, msg, vanished) -> Void in
-                    print("error from server \(err)")
-                    print("fetched \(msg?.count) messages")
-                    self.emails.insert(contentsOf: msg ?? [], at: 0)
-                }
-                fetchOperation.progress = { (current: UInt32) in
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.imap_session.oAuth2Token = token
+
+            let statusOperation = self.imap_session.folderStatusOperation("INBOX")
+            statusOperation?.start { (_, _) in
+                let computed_uid = max(1, Int(self.emails.first?.uid ?? 0) - 26)
+                let min_range: UInt64 = UInt64(computed_uid)
+                let max_range: UInt64 = UInt64(self.emails.first?.uid ?? 0)
+                if min_range != max_range {
+                    let uids = MCOIndexSet(range: MCORange(location: min_range, length: 25))
+                    let kind: MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
+
+                    let fetch = self.imap_session.fetchMessagesOperation(withFolder: "INBOX",
+                                                                         requestKind: kind,
+                                                                         uids: uids)
+                    fetch?.start { (err, msg, _) in
+                        if let err { print("fetch_past error: \(err)") }
+                        self.emails.insert(contentsOf: msg ?? [], at: 0)
+                    }
                 }
             }
         }
     }
-    
+
     func resetup_imap_session(completion: @escaping ()->()) {
-        imap_session = MCOIMAPSession()
-        if imap_session.responds(to: Selector(("setVoIPEnabled:"))) {
-            imap_session.setValue(false, forKey: "voIPEnabled")
-        } else {
-            imap_session.isVoIPEnabled = false
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.configureIMAPSessions(with: token)
+            completion()
         }
-        imap_session.hostname = "imap.gmail.com"
-        imap_session.username = account_email
-        imap_session.port = 993
-        imap_session.password = KeychainWrapper.standard.string(forKey: "email_password")
-        imap_session.authType = .saslPlain
-        imap_session.connectionType = MCOConnectionType.TLS
-        imap_session.connectionLogger = {(connectionID, type, data) in
-            if data != nil {
-                if let string = NSString(data: data ?? Data(), encoding: String.Encoding.utf8.rawValue){
-                    print("Connectionlogger: \(string)")
-                }
-            }
-        }
-        completion()
     }
-    
     func setup_imap_session() {
-        imap_session.hostname = "imap.gmail.com"
-        imap_session.username = account_email
-        imap_session.port = 993
-        imap_session.password = KeychainWrapper.standard.string(forKey: "email_password")
-        imap_session.authType = .saslPlain
-        imap_session.connectionType = MCOConnectionType.TLS
-        imap_session.connectionLogger = {(connectionID, type, data) in
-            if data != nil {
-                if let string = NSString(data: data ?? Data(), encoding: String.Encoding.utf8.rawValue){
-                    print("Connectionlogger: \(string)")
-                }
-            }
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.configureIMAPSessions(with: token)
         }
     }
-    
+
     func re_establish_OAuth(completion: @escaping ()->()) {
         let loader = OAuth2DataLoader(oauth2: oauth2)
         loader.alsoIntercept403 = true
         if oauth2.hasUnexpiredAccessToken() == false {
-            print("called grabbing token via refresh")
-            oauth2.doRefreshToken(callback: {_,_ in
+            oauth2.doRefreshToken { _,_ in
                 DispatchQueue.main.async {
-                    self.token = oauth2.accessToken ?? ""
+                    self.token = self.oauth2.accessToken ?? ""
                     self.imap_session.cancelAllOperations()
-                    self.imap_session.disconnectOperation()
+                    self.configureIMAPSessions(with: self.token)
                     self.setup_mailcore_idle_operation()
-                    self.resetup_imap_session(completion: {
-                        completion()
-                    })
+                    self.resetup_imap_session { completion() }
                 }
-            })
-            oauth2.afterAuthorizeOrFail = { authParameters, error in
-                guard error == nil else { print(error, "ZK"); return }
             }
-            //I should resetup imap_idle_operation
+            oauth2.afterAuthorizeOrFail = { _, error in
+                if let error { print("OAuth afterAuthorizeOrFail: \(error)") }
+            }
             self.imap_fetch_session.oAuth2Token = token
         } else {
             completion()
         }
     }
-    
     func establish_OAuth() {
         let loader = OAuth2DataLoader(oauth2: oauth2)
         loader.alsoIntercept403 = true
@@ -1777,25 +1892,18 @@ class EmailManager: ObservableObject {
                 do {
                     let url = try oauth2.authorizeURL(params: nil)
                     try oauth2.authorizer.openAuthorizeURLInBrowser(url)
-                    
-                } catch {
-                    print(error)
-                }
+                } catch { print(error) }
             } else {
-                oauth2.doRefreshToken(callback: {_,_ in})
+                oauth2.doRefreshToken { _,_ in }
             }
-        } else {
-            if oauth2.hasUnexpiredAccessToken() == false {
-                oauth2.doRefreshToken(callback: {_,_ in})
-                print("made it here")
-            }
+        } else if oauth2.hasUnexpiredAccessToken() == false {
+            oauth2.doRefreshToken { _,_ in }
         }
-        oauth2.afterAuthorizeOrFail = { authParameters, error in
-            guard error == nil else { print(error, "ZK"); return }
+        oauth2.afterAuthorizeOrFail = { _, error in
+            if let error { print("OAuth afterAuthorizeOrFail: \(error)") }
         }
         token = oauth2.accessToken ?? ""
     }
-    
     func initial_establish_OAuth(completion: @escaping ()->()) {
         let loader = OAuth2DataLoader(oauth2: oauth2)
         loader.alsoIntercept403 = true
@@ -1804,119 +1912,197 @@ class EmailManager: ObservableObject {
                 do {
                     let url = try oauth2.authorizeURL(params: nil)
                     try oauth2.authorizer.openAuthorizeURLInBrowser(url)
-                    
-                } catch {
-                    print(error)
-                }
+                } catch { print(error) }
             } else {
-                oauth2.doRefreshToken(callback: {_,_ in})
+                oauth2.doRefreshToken { _,_ in }
             }
-        } else {
-            if oauth2.hasUnexpiredAccessToken() == false {
-                oauth2.doRefreshToken(callback: {_,_ in})
-                print("made it here")
-            }
+        } else if oauth2.hasUnexpiredAccessToken() == false {
+            oauth2.doRefreshToken { _,_ in }
         }
-        oauth2.afterAuthorizeOrFail = { authParameters, error in
-            guard error == nil else { print(error, "ZK"); return }
+        oauth2.afterAuthorizeOrFail = { _, error in
+            if let error { print("OAuth afterAuthorizeOrFail: \(error)") }
         }
         token = oauth2.accessToken ?? ""
         completion()
     }
-    
-    func get_unread_count() {
-        let statusOperation: MCOIMAPFolderStatusOperation = self.imap_session.folderStatusOperation("INBOX")
-        statusOperation.start { (err, status) -> Void in
-            self.total_unread_quantity = Int(status?.unseenCount ?? 0)
-        }
-    }
-    
+
     func retrieve_emails() {
-        let folder : String = "INBOX"
-        let uids : MCOIndexSet = MCOIndexSet(range: MCORangeMake(1, UINT64_MAX))
-        let requestKind:MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
-        let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("emails")
-        var quantity: UInt32 = 0
-        var temp_email_holder: [MCOIMAPMessage] = []
-        
-        DispatchQueue.global(qos: .background).async {
-            do {
-                let data = try Data(contentsOf: path)
-                temp_email_holder = try NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(data) as? [MCOIMAPMessage] ?? []
-                DispatchQueue.main.async {
-                    self.emails = temp_email_holder
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.imap_session.oAuth2Token = token
+
+            let folder = "INBOX"
+            let uids = MCOIndexSet(range: MCORangeMake(1, 50))
+            let kind: MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
+
+            DispatchQueue.global(qos: .background).async {
+                do {
+                    let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                        .appendingPathComponent("emails")
+                    let data = try Data(contentsOf: path)
+                    let temp: [MCOIMAPMessage] =
+                        (try NSKeyedUnarchiver.unarchiveTopLevelObjectWithData(data) as? [MCOIMAPMessage]) ?? []
+                    DispatchQueue.main.async { self.emails = temp }
+                } catch {
+                    print("Cache read error: \(error.localizedDescription)")
                 }
-            } catch {
-                print("ERROR: \(error.localizedDescription)")
-            }
-            if temp_email_holder.isEmpty {
-                let fetchOperation : MCOIMAPFetchMessagesOperation = self.imap_session.fetchMessagesOperation(withFolder: folder, requestKind: requestKind, uids: uids)
-                let statusOperation: MCOIMAPFolderStatusOperation = self.imap_session.folderStatusOperation("INBOX")
-                statusOperation.start { (err, status) -> Void in
-                    quantity = status?.messageCount ?? 1
-                    print(status?.uidNext)
-                }
-                
-                fetchOperation.start { (err, msg, vanished) -> Void in
-                    print("error from server \(err)")
-                    print("fetched \(msg?.count) messages")
-                    self.emails = msg ?? []
-                    do {
-                        let key_archive = try NSKeyedArchiver.archivedData(withRootObject: msg ?? [], requiringSecureCoding: false)
-                        try key_archive.write(to: path)
-                    } catch {
-                        print(error)
+
+                if self.emails.isEmpty {
+                    let fetch = self.imap_session.fetchMessagesOperation(withFolder: folder,
+                                                                         requestKind: kind,
+                                                                         uids: uids)
+                    let statusOp = self.imap_session.folderStatusOperation("INBOX")
+                    statusOp?.start { (_, status) in
+                        print(status?.uidNext as Any)
+                    }
+                    fetch?.start { (err, msg, _) in
+                        if let err { print("retrieve_emails error: \(err)") }
+                        self.emails = msg ?? []
+                        do {
+                            let key_archive = try NSKeyedArchiver.archivedData(withRootObject: msg ?? [],
+                                                                               requiringSecureCoding: false)
+                            let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                                .appendingPathComponent("emails")
+                            try key_archive.write(to: path)
+                        } catch { print("Cache write error: \(error)") }
                     }
                 }
-                fetchOperation.progress = { (current: UInt32) in
-                }
             }
         }
     }
-    
+
     func update_emails() {
-        let requestKind : MCOIMAPMessagesRequestKind = MCOIMAPMessagesRequestKind.headers
-        var start: UInt64 = UInt64(self.emails.last?.uid ?? 1) + 1
-        var end: UInt64 = start + 64
-        let uids : MCOIndexSet = MCOIndexSet(range: MCORangeMake(1, 64))
-        let update_session: MCOIMAPFetchMessagesOperation = self.imap_session.syncMessages(withFolder: "INBOX", requestKind: requestKind, uids: uids, modSeq: UInt64(self.emails.last?.modSeqValue ?? 0))
-        update_session.start { (err, msg, vanished) -> Void in
-            print("error from server \(err)")
-            print("fetched \(msg?.count) messages")
-            DispatchQueue.global(qos: .background).async {
-                self.emails.append(contentsOf: msg ?? [])
-            }
-        }
-    }
-    func update_emails_2() {
-        let statusOperation: MCOIMAPFolderStatusOperation = self.imap_session.folderStatusOperation("INBOX")
-        statusOperation.start { (err, status) -> Void in
-            
-            let requestKind:MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
-            var start: UInt64 = UInt64(self.emails.last?.uid ?? 1) + 1
-            var end: UInt64 = start + 64
-            let uids : MCOIndexSet = MCOIndexSet(range: MCORangeMake(UInt64(self.emails.last?.uid ?? 0),  UInt64(status?.uidNext ?? 0)))
-            let update_session: MCOIMAPFetchMessagesOperation = self.imap_session.syncMessages(withFolder: "INBOX", requestKind: requestKind, uids: uids, modSeq: UInt64(self.emails.last?.modSeqValue ?? 0))
-            update_session.start { (err, msg, vanished) -> Void in
-                print("error from server \(err)")
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.imap_session.oAuth2Token = token
+
+            let requestKind: MCOIMAPMessagesRequestKind = .headers
+            let uids = MCOIndexSet(range: MCORangeMake(1, 64))
+            let update = self.imap_session.syncMessages(withFolder: "INBOX",
+                                                        requestKind: requestKind,
+                                                        uids: uids,
+                                                        modSeq: UInt64(self.emails.last?.modSeqValue ?? 0))
+            update?.start { (err, msg, _) in
+                if let err { print("update_emails error: \(err)") }
                 DispatchQueue.global(qos: .background).async {
                     self.emails.append(contentsOf: msg ?? [])
                 }
             }
         }
     }
+    func update_emails_2() {
+        withFreshAccessToken { token in
+            guard let token else { return }
+            self.imap_session.oAuth2Token = token
+
+            let statusOp = self.imap_session.folderStatusOperation("INBOX")
+            statusOp?.start { (_, status) in
+                let kind: MCOIMAPMessagesRequestKind = [.headers, .extraHeaders, .fullHeaders, .structure, .flags]
+                let uids = MCOIndexSet(range: MCORangeMake(
+                    UInt64(self.emails.last?.uid ?? 0),
+                    UInt64(status?.uidNext ?? 0))
+                )
+                let update = self.imap_session.syncMessages(withFolder: "INBOX",
+                                                            requestKind: kind,
+                                                            uids: uids,
+                                                            modSeq: UInt64(self.emails.last?.modSeqValue ?? 0))
+                update?.start { (err, msg, _) in
+                    if let err { print("update_emails_2 error: \(err)") }
+                    DispatchQueue.global(qos: .background).async {
+                        self.emails.append(contentsOf: msg ?? [])
+                    }
+                }
+            }
+        }
+    }
+
+    func sendEmail(to: [String],
+                   cc: [String] = [],
+                   bcc: [String] = [],
+                   subject: String,
+                   bodyPlain: String,
+                   completion: @escaping (Result<Void, Error>) -> Void)
+    {
+        withFreshAccessToken { token in
+            guard let token else {
+                completion(.failure(NSError(domain: "oauth", code: 1,
+                                            userInfo: [NSLocalizedDescriptionKey: "No OAuth token"])))
+                return
+            }
+
+            let builder = MCOMessageBuilder()
+            let fromAddr = MCOAddress(displayName: self.account_name.isEmpty ? nil : self.account_name,
+                                      mailbox: self.account_email)
+            builder.header.from = fromAddr
+            builder.header.to = to.map { MCOAddress(mailbox: $0) }
+            builder.header.cc = cc.map { MCOAddress(mailbox: $0) }
+            builder.header.bcc = bcc.map { MCOAddress(mailbox: $0) }
+            builder.header.subject = subject
+            builder.textBody = bodyPlain
+
+            guard let rfc822 = builder.data() else {
+                completion(.failure(NSError(domain: "smtp", code: 2,
+                                            userInfo: [NSLocalizedDescriptionKey: "Failed to build message"])))
+                return
+            }
+
+            let smtp = MCOSMTPSession()
+            smtp.hostname = "smtp.gmail.com"
+            smtp.port = 465
+            smtp.connectionType = .TLS
+            smtp.username = self.account_email
+            smtp.authType = .xoAuth2
+            smtp.oAuth2Token = token
+            smtp.connectionLogger = { (connectionID, type, data) in
+                if let data, let s = String(data: data, encoding: .utf8) {
+                    print("SMTP[\(connectionID)]: \(s)")
+                }
+            }
+
+            let op = smtp.sendOperation(with: rfc822)
+            op?.start { error in
+                if let error {
+                    print("SMTP send error: \(error.localizedDescription)")
+                    self.withFreshAccessToken { newToken in
+                        guard let newToken else { return completion(.failure(error)) }
+                        smtp.oAuth2Token = newToken
+                        let retry = smtp.sendOperation(with: rfc822)
+                        retry?.start { retryErr in
+                            if let retryErr { completion(.failure(retryErr)) }
+                            else { completion(.success(())) }
+                        }
+                    }
+                } else {
+                    completion(.success(()))
+                }
+            }
+        }
+    }
+    
+    func signOut() {
+        oauth2.forgetTokens()
+        
+        account_email = ""
+        account_name = ""
+        account_description = ""
+        token = ""
+        
+        imap_session.disconnectOperation().start { _ in }
+        imap_fetch_session.disconnectOperation().start { _ in }
+        
+        let path = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("emails")
+        try? FileManager.default.removeItem(at: path)
+        
+        print("Signed out and cleared local data.")
+    }
+    
 }
 
 extension UserDefaults {
-    func set(date: Date?, forKey key: String){
-        self.set(date, forKey: key)
-    }
-    
-    func date(forKey key: String) -> Date? {
-        return self.value(forKey: key) as? Date
-    }
+    func set(date: Date?, forKey key: String){ self.set(date, forKey: key) }
+    func date(forKey key: String) -> Date? { return self.value(forKey: key) as? Date }
 }
-
 
 extension Date {
     var calendarDate: String {
@@ -2141,3 +2327,181 @@ extension Int {
         return Int.numberFormatter.string(from: NSNumber(value: self)) ?? ""
     }
 }
+
+func debugOAuth(_ o: OAuth2) {
+    print("=== OAUTH DEBUG ===")
+    print("Type:", type(of: o))
+    print("clientId:", o.clientId ?? "nil")
+    print("authURL:", o.authURL.absoluteString)
+    print("tokenURL:", o.tokenURL?.absoluteString)
+    print("redirectURIs:", o.redirect ?? "")
+    print("scopes:", (o as? OAuth2CodeGrant)?.scope ?? "nil")
+    print("====================")
+}
+
+//struct mail_account_adder: View {
+//    @State var account_name: String = ""
+//    @State var account_email: String = ""
+//    @State var account_description: String = ""
+//    @State var account_password: String = ""
+//    @State private var showSignIn = false
+//    @Binding var show_add_account: Bool
+//    @EnvironmentObject var EmailManager: EmailManager
+//    @State private var authInFlight = false
+//    var body: some View {
+//        VStack(spacing: 0) {
+//            Spacer().frame(height: 24)
+//            generic_title_bar_cancel_next(title: "Gmail", cancel_action: {
+//                withAnimation(.linear(duration:0.35)) {
+//                    show_add_account = false
+//                }
+//            }, save_action: {
+////                if account_email != "" && account_name != "" && account_description != "" {
+////                    EmailManager.account_email = account_email
+////                    EmailManager.account_name = account_name
+////                    EmailManager.account_description = account_description
+////                    let saveSuccessful: Bool = KeychainWrapper.standard.set(account_password, forKey: "email_password")
+////                    if account_email == EmailManager.account_email && account_name == EmailManager.account_name && account_description == EmailManager.account_description && saveSuccessful {
+////                        print("doing initial setup")
+////                        EmailManager.do_initial_setup()
+////                    }
+////                }
+//              //  startAuth()
+//
+//               // if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
+//                    startExternalGoogleSignIn()
+//               // }
+//
+//            }, show_cancel: true, show_save: true).frame(height: 60)
+//            ZStack {
+//                settings_main_list()
+//                VStack(spacing: 0) {
+//                    ZStack {
+//                        RoundedRectangle(cornerRadius: 10).fill(Color.white).overlay(RoundedRectangle(cornerRadius: 10)
+//                                                                                        .stroke(Color(red: 171/255, green: 171/255, blue: 171/255), lineWidth: 1.25))
+//                        VStack(spacing:0) {
+//                            ZStack {
+//                                Rectangle().fill(Color.clear).frame(height:50).border_bottom(width: 1.25, edges: [.bottom], color: Color(red: 171/255, green: 171/255, blue: 171/255))
+//                                HStack {
+//                                    Text("Name").font(.custom("Helvetica Neue Bold", fixedSize: 18)).foregroundColor(.black).padding(.leading, 12)
+//                                    TextField("John Appleseed", text: $account_name).font(.custom("Helvetica Neue Regular", fixedSize: 18)).foregroundColor(Color(red: 62/255, green: 83/255, blue: 131/255))
+//                                }
+//                            }.frame(height: 50)
+//                            ZStack {
+//                                Rectangle().fill(Color.clear).frame(height:50).border_bottom(width: 1.25, edges: [.bottom], color: Color(red: 171/255, green: 171/255, blue: 171/255))
+//                                HStack {
+//                                    Text("Address").font(.custom("Helvetica Neue Bold", fixedSize: 18)).foregroundColor(.black).padding(.leading, 12)
+//                                    TextField("example@gmail.com", text: $account_email).font(.custom("Helvetica Neue Regular", fixedSize: 18)).keyboardType(.emailAddress).autocapitalization(.none).disableAutocorrection(true).foregroundColor(Color(red: 62/255, green: 83/255, blue: 131/255))
+//                                }
+//                            }.frame(height: 50)
+//                            ZStack {
+//                                Rectangle().fill(Color.clear).frame(height:50).border_bottom(width: 1.25, edges: [.bottom], color: Color(red: 171/255, green: 171/255, blue: 171/255))
+//                                HStack {
+//                                    Text("Password").font(.custom("Helvetica Neue Bold", fixedSize: 18)).foregroundColor(.black).padding(.leading, 12)
+//                                    SecureField("Required", text: $account_password).font(.custom("Helvetica Neue Regular", fixedSize: 18)).keyboardType(.default).autocapitalization(.none).disableAutocorrection(true).foregroundColor(Color(red: 62/255, green: 83/255, blue: 131/255))
+//                                }
+//                            }.frame(height: 50)
+//                            ZStack {
+//                                Rectangle().fill(Color.clear).frame(height:50)
+//                                HStack {
+//                                    Text("Description").font(.custom("Helvetica Neue Bold", fixedSize: 18)).foregroundColor(.black).padding(.leading, 12)
+//                                    TextField("My Gmail Account", text: $account_description).font(.custom("Helvetica Neue Regular", fixedSize: 18)).foregroundColor(Color(red: 62/255, green: 83/255, blue: 131/255))
+//                                }
+//                            }.frame(height: 50)
+//                        }
+//                    }.frame(height:200).padding([.leading, .trailing], 12).padding(.top, 8)
+//                    Spacer().frame(height: 15)
+//                    Group {
+//                    Text("To sign in, please either enable less secure apps or generate an app specific password.\n") +
+//                        Text("Learn more.").underline()
+//                    }.multilineTextAlignment(.center).lineLimit(nil).foregroundColor(Color(red: 76/255, green: 86/255, blue: 108/255)).font(.custom("Helvetica Neue Regular", fixedSize: 15)).shadow(color: Color.white.opacity(0.9), radius: 0, x: 0.0, y: 0.9).padding([.leading, .trailing], 24).onTapGesture {
+//                        guard let url = URL(string: "https://www.youtube.com/watch?v=Ee7PDsbfOUI") else { return }
+//                        UIApplication.shared.open(url)
+//                    }
+//                    Spacer()
+//                }
+//            }
+//        }
+//    }
+//    private func startAuth() {
+//        guard !authInFlight else { return }
+//        authInFlight = true
+//        debugOAuth(EmailManager.oauth2)
+//        let ctx = EmailManager.oauth2.authConfig.authorizeContext
+//        print("authorizeContext:", String(describing: ctx))
+//        EmailManager.oauth2.authorize { _, error in
+//            DispatchQueue.main.async {
+//                authInFlight = false
+//                if let error = error {
+//                    print("OAuth authorize error:", error)
+//                    return
+//                }
+//
+//                var email = emailFromIDToken(EmailManager.oauth2.idToken)
+//
+//                  func startWith(email: String) {
+//                      DispatchQueue.main.async {
+//                          EmailManager.account_email = email
+//                          EmailManager.do_initial_setup()
+//                      }
+//                  }
+//
+//                if let e = email {
+//                    startWith(email: e)
+//                }
+//            }
+//        }
+//    }
+//
+//    func startExternalGoogleSignIn() {
+//
+//        guard let app = UIApplication.shared.delegate as? AppDelegate else { return }
+//        let oauth2 = app.oauth2
+//
+//        oauth2.authConfig.authorizeEmbedded = false
+//        oauth2.authConfig.ui.useSafariView = false
+//        oauth2.authConfig.authorizeContext = nil
+//
+//        do {
+//            let url = try oauth2.authorizeURL(params: nil)
+//
+//            print("AUTH URL:", url.absoluteString)
+//            DispatchQueue.main.async {
+//                    UIApplication.shared.open(url, options: [:]) { ok in
+//                        if !ok { print("UIApplication.open returned false") }
+//                    }
+//                }
+//
+//        } catch {
+//            print("OAuth start error:", error)
+//        }
+//
+//        oauth2.afterAuthorizeOrFail = { params, error in
+//            if let error = error {
+//                print("OAuth failed:", error)
+//                return
+//            }
+//            if let idToken = oauth2.idToken, let email = emailFromIDToken(idToken) {
+//                DispatchQueue.main.async {
+//                    EmailManager.account_email = email
+//                    EmailManager.do_initial_setup()
+//                }
+//            }
+//        }
+//    }
+//
+//    func emailFromIDToken(_ idToken: String?) -> String? {
+//        guard let id = idToken else { return nil }
+//        let parts = id.split(separator: ".")
+//        guard parts.count >= 2 else { return nil }
+//        var s = String(parts[1])
+//        s = s.replacingOccurrences(of: "-", with: "+")
+//             .replacingOccurrences(of: "_", with: "/")
+//        while s.count % 4 != 0 { s.append("=") }
+//
+//        guard let data = Data(base64Encoded: s),
+//              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+//              let email = json["email"] as? String else { return nil }
+//        return email
+//    }
+//}

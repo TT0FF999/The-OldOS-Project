@@ -9,6 +9,7 @@ import SwiftUI
 import CoreTelephony
 import PureSwiftUITools
 import Network
+import Combine
 
 extension View where Self: Equatable {
     public func equatable() -> EquatableView<Self> {
@@ -157,7 +158,9 @@ struct Controller: View {
                 }
                 multitasking_apps.insert(current_view, at: 0)
             }
-        }.buttonStyle(buttonShapesOverride())
+        } .ifButtonShapesEnabledLive { view in
+            view.buttonStyle(buttonShapesOverride())
+        }//.buttonStyle(buttonShapesOverride())
     }
 }
 
@@ -434,6 +437,7 @@ extension View {
     
 }
 
+
 struct HomeScreen: View {
     @Binding var apps_scale: CGFloat
     @Binding var apps_scale_height: CGFloat
@@ -467,11 +471,11 @@ struct HomeScreen: View {
                         LinearGradient(gradient:Gradient(colors: [Color(red: 34/255, green: 34/255, blue: 34/255).opacity(0.0), Color(red: 24/255, green: 24/255, blue: 24/255).opacity(0.85)]), startPoint: .top, endPoint: .bottom).frame(minWidth: geometry.size.width, maxWidth:geometry.size.width, minHeight: geometry.size.height/4.25, maxHeight: geometry.size.height/4.25, alignment: .center).clipped()
                     }
                 }
-                Color.black.opacity(selectedPage == 0 ? 0.65 : 0).padding(.top, 24)
+                Color.black.opacity(selectedPage == 0 ? 0.65 : 0).padding(.top, 24).animation(.easeInOut, value: selectedPage)
                 VStack {
                     status_bar().frame(minHeight: 24, maxHeight:24).zIndex(1)
                     Spacer().frame(height: 30)
-                    TabView(selection: $selectedPage.animation()) {
+                    TabView(selection: $selectedPage) {
                         search(width: $search_width, height: $search_height, show_searchField: $show_searchField, apps_scale: $apps_scale, current_view: $current_view, dock_offset: $dock_offset).frame(maxWidth: geometry.size.width, maxHeight:geometry.size.height).zIndex(0).clipped().tag(0)
                         apps(apps_scale:$apps_scale, apps_scale_height: $apps_scale_height, show_searchField: $show_searchField, icon_scaler: $icon_scaler, current_view: $current_view, dock_offset: $dock_offset, width: geometry.size.width, height: geometry.size.height).scaleEffect(apps_scale)   .animation(.easeIn).frame(maxWidth: geometry.size.width, maxHeight:geometry.size.height).zIndex(0).clipped().tag(1)    .overlay(
                             GeometryReader { proxy in
@@ -482,7 +486,7 @@ struct HomeScreen: View {
                             }
                         )
                         apps_second(apps_scale:$apps_scale, apps_scale_height: $apps_scale_height, show_searchField: $show_searchField, icon_scaler: $icon_scaler, current_view: $current_view, dock_offset: $dock_offset, width: geometry.size.width, height: geometry.size.height).frame(maxWidth: geometry.size.width, maxHeight:geometry.size.height).zIndex(0).clipped().tag(2).frame(width:search_width, height: search_height)
-                    }.layoutPriority(1).scale(apps_scale).tabViewStyle(PageTabViewStyle(indexDisplayMode: .never)).onAppear() {
+                    }.layoutPriority(1).scale(apps_scale).tabViewStyle(PageTabViewStyle(indexDisplayMode: .never)).animation(.easeInOut, value: selectedPage).onAppear() {
                         UIScrollView.appearance().bounces = false
                     }.opacity(1/(Double(dock_offset) + 1)).clipped().grayscale(show_multitasking == true ? 0.99 : 0).opacity(show_multitasking == true ? 0.3 : 1)
                     //added layout up there
@@ -1144,7 +1148,7 @@ struct dock2: View {
                         app(image_name: "Mail", app_name: "Mail", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
                         app(image_name: "Safari", app_name: "Safari", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
                         app(image_name: "iPod", app_name: "iPod", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                    }.offset(y: 0)
+                    }.offset(y: 0) .compositingGroup() .drawingGroup()
                 }
             }.grayscale(show_multitasking == true ? 0.99 : 0).opacity(show_multitasking == true ? 0.3 : 1)
         }
@@ -1163,6 +1167,41 @@ struct battery: View {
             }
             Rectangle().overlay(RoundedRectangle(cornerRadius:0.25).stroke(Color.init(red: 190/255, green: 190/255, blue: 190/255), lineWidth: 1)).foregroundColor(.clear).frame(width: 3, height: 5).offset(x:-7.95)
         }
+    }
+}
+
+private struct IfButtonShapesEnabledModifier<S: View>: ViewModifier {
+    let style: (AnyView) -> S
+    @State private var enabled: Bool = {
+        if #available(iOS 15.0, *) { return UIAccessibility.buttonShapesEnabled }
+        return false
+    }()
+
+    func body(content: Content) -> some View {
+        let base = AnyView(content)
+        Group {
+            if enabled {
+                style(base)      // apply your style when Button Shapes is ON
+            } else {
+                base             // leave as-is when it's OFF
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIAccessibility.buttonShapesEnabledStatusDidChangeNotification
+        )) { _ in
+            if #available(iOS 15.0, *) {
+                enabled = UIAccessibility.buttonShapesEnabled
+            }
+        }
+    }
+}
+
+public extension View {
+    /// Apply a style only when the user has "Button Shapes" enabled (updates live).
+    func ifButtonShapesEnabledLive<S: View>(
+        _ style: @escaping (AnyView) -> S
+    ) -> some View {
+        modifier(IfButtonShapesEnabledModifier(style: style))
     }
 }
 
