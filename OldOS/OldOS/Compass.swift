@@ -44,8 +44,11 @@ struct compass_face: View {
             ZStack {
                 Image("CompassBezel").resizable().scaledToFill().frame(width: geometry.size.width, height: geometry.size.height)
                 Image("CompassFace").resizable().scaledToFill().frame(width: geometry.size.width*500/586, height: geometry.size.height*500/586)
+                Image("CompassFaceHighlight").resizable().scaledToFill().frame(width: geometry.size.width*320/586*640/586, height: geometry.size.width*204/586*640/586).offset(y:-geometry.size.width*130/586*640/586)
                 Image("CompassFaceRim").resizable().scaledToFill().padding(12).frame(width: geometry.size.width*488/586*640/586, height: geometry.size.height*488/586*640/586).rotationEffect(.degrees(-compass.heading))
                 Image("CompassFaceDirection").resizable().scaledToFill().frame(width: geometry.size.width*375/586*640/586, height: geometry.size.width*375/586*640/586).rotationEffect(.degrees(-compass.heading))
+                Image("CompassPivot").resizable().scaledToFill().frame(width: geometry.size.width*100/586*640/586, height: geometry.size.width*100/586*640/586)
+                    .offset(x: -1, y:geometry.size.width*100/586*640/586*0.15)
                 Image("CompassFaceShadow").resizable().scaledToFill().frame(width: geometry.size.width*500/586, height: geometry.size.height*500/586)
             }.onAppear() {
                 print(geometry.size.width*488/586*640/586)

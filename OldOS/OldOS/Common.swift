@@ -1911,7 +1911,7 @@ struct tool_bar_rectangle_button_smaller_image: View {
         Button(action:{action?()}) {
             ZStack {
                 if use_image == true {
-                    Image(content).resizable().scaledToFit().frame(width: 7).padding([.leading, .trailing], 11)
+                    Image(content).resizable().scaledToFit().frame(width: 7).padding([.leading, .trailing], 13)
                 } else {
                 Text(content).font(.custom("Helvetica Neue Bold", fixedSize: 13.25)).foregroundColor(.white).shadow(color: Color.black.opacity(0.75), radius: 1, x: 0, y: -0.25).lineLimit(0).padding([.leading, .trailing], 11)
                 }
