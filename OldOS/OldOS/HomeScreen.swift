@@ -58,6 +58,8 @@ struct Controller: View {
     @State var current_multitasking_app: String = "HS"
     @State var should_update: Bool = false
     @State var show_remove: Bool = false
+    @State var folder_offset: CGFloat = 0
+    @State var show_folder: Bool = false
     @EnvironmentObject var MusicObserver: MusicObserver
     @EnvironmentObject var EmailManager: EmailManager
     var body: some View {
@@ -73,7 +75,7 @@ struct Controller: View {
                                 LockScreen(current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, apps_scale_height: $apps_scale_height).padding([.leading, .trailing])
                             case "HS":
                                 multitasking_controller(current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, multitasking_apps: $multitasking_apps, instant_multitasking_change: $instant_multitasking_change, current_multitasking_app: $current_multitasking_app, should_update: $should_update, show_remove: $show_remove, show_multitasking: $show_multitasking, relative_app: "HS")
-                                HomeScreen(apps_scale: $apps_scale, apps_scale_height: $apps_scale_height, dock_offset: $dock_offset, selectedPage: $selected_page, search_width: $search_width, search_height:$search_height, current_view: $current_view, show_multitasking: $show_multitasking, instant_multitasking_change: $instant_multitasking_change).padding([.leading, .trailing]).modifiedForMultitasking2(show_multitasking, instant_multitasking_change, current_multitasking_app == "HS") //.compositingGroup() -> maybe
+                                HomeScreen(apps_scale: $apps_scale, apps_scale_height: $apps_scale_height, dock_offset: $dock_offset, selectedPage: $selected_page, search_width: $search_width, search_height:$search_height, current_view: $current_view, show_multitasking: $show_multitasking, instant_multitasking_change: $instant_multitasking_change, folder_offset: $folder_offset, show_folder: $show_folder).padding([.leading, .trailing]).modifiedForMultitasking2(show_multitasking, instant_multitasking_change, current_multitasking_app == "HS") //.compositingGroup() -> maybe
                             case "Settings":
                                 multitasking_controller(current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, multitasking_apps: $multitasking_apps, instant_multitasking_change: $instant_multitasking_change, current_multitasking_app: $current_multitasking_app, should_update: $should_update, show_remove: $show_remove, show_multitasking: $show_multitasking, relative_app: "Settings")
                                 Settings(show_multitasking: $instant_multitasking_change).equatable().padding([.leading, .trailing]).transition(.scale).modifiedForMultitasking2(show_multitasking, instant_multitasking_change, current_multitasking_app == "Settings").environmentObject(EmailManager)
@@ -128,13 +130,16 @@ struct Controller: View {
                             case "Calendar":
                                 multitasking_controller(current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, multitasking_apps: $multitasking_apps, instant_multitasking_change: $instant_multitasking_change, current_multitasking_app: $current_multitasking_app, should_update: $should_update, show_remove: $show_remove, show_multitasking: $show_multitasking, relative_app: "Calendar")
                                 CalendarView().padding([.leading, .trailing]).transition(.scale).modifiedForMultitasking2(show_multitasking, instant_multitasking_change, current_multitasking_app == "Calendar")
+                            case "Compass":
+                                multitasking_controller(current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, multitasking_apps: $multitasking_apps, instant_multitasking_change: $instant_multitasking_change, current_multitasking_app: $current_multitasking_app, should_update: $should_update, show_remove: $show_remove, show_multitasking: $show_multitasking, relative_app: "Compass")
+                                Compass(current_view: $current_view).padding([.leading, .trailing]).transition(.scale).modifiedForMultitasking2(show_multitasking, instant_multitasking_change, current_multitasking_app == "Compass")
                             default:
                                 LockScreen(current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, apps_scale_height: $apps_scale_height).padding([.leading, .trailing])
                             }
                         }//.disabled(show_multitasking)
                     }
                     Spacer().frame(height:1)
-                    home_bar(selectedPage: $selected_page, current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, show_multitasking: $show_multitasking, instant_multitasking_change: $instant_multitasking_change, current_multitasking_app: $current_multitasking_app, should_update: $should_update, show_remove: $show_remove).padding(.top).frame(height: 100)
+                    home_bar(selectedPage: $selected_page, current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, show_multitasking: $show_multitasking, instant_multitasking_change: $instant_multitasking_change, current_multitasking_app: $current_multitasking_app, should_update: $should_update, show_remove: $show_remove, folder_offset: $folder_offset, show_folder: $show_folder).padding(.top).frame(height: 100)
                 }
             }
         }.ignoresSafeArea(.keyboard).onAppear() {
@@ -302,6 +307,8 @@ struct home_bar: View {
     @Binding var current_multitasking_app: String
     @Binding var should_update: Bool
     @Binding var show_remove: Bool
+    @Binding var folder_offset: CGFloat
+    @Binding var show_folder: Bool
     var body: some View {
         ZStack {
             Color.black.edgesIgnoringSafeArea(.all)
@@ -335,10 +342,20 @@ struct home_bar: View {
                             withAnimation() {
                                 // when on the first page, pressing the home button shows the spotlight search
                                 // https://www.youtube.com/watch?v=hMZXnyk2SJA
-                                if selectedPage == 1 {
-                                    selectedPage = 0
+                                if show_folder && folder_offset == 150 {
+                                    withAnimation(.linear(duration: 0.32)) {
+                                        folder_offset = 0
+                                        //dock_offset = 150
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                                        show_folder = false
+                                    }
                                 } else {
-                                    selectedPage = 1
+                                    if selectedPage == 1 {
+                                        selectedPage = 0
+                                    } else {
+                                        selectedPage = 1
+                                    }
                                 }
                             }
                         }
@@ -359,7 +376,7 @@ struct home_bar: View {
                 }, doubleTapAction: {
                     let generator = UINotificationFeedbackGenerator()
                               generator.notificationOccurred(.success)
-                    if current_view != "LS" {
+                    if current_view != "LS" && !show_folder {
                         current_multitasking_app = current_view
                         if !momentary_disable {
                             if !show_multitasking {
@@ -453,15 +470,77 @@ struct HomeScreen: View {
     @Binding var current_view: String
     @Binding var show_multitasking: Bool
     @Binding var instant_multitasking_change: Bool
+    @Binding var folder_offset: CGFloat
+    @Binding var show_folder: Bool
     @GestureState  var dragOffset: CGFloat = 0
     var userDefaults = UserDefaults.standard
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                if userDefaults.bool(forKey: "Camera_Wallpaper_Home") == false {
-                    Image(userDefaults.string(forKey: "Home_Wallpaper") ?? "Wallpaper_1").resizable().aspectRatio(contentMode: .fill).frame(height:geometry.size.height).cornerRadius(0).frame(minWidth: geometry.size.width, maxWidth:geometry.size.width, minHeight: geometry.size.height, maxHeight: geometry.size.height, alignment: .center).clipped()
-                } else {
-                    Image(uiImage: (UIImage(data: userDefaults.object(forKey: "Home_Wallpaper") as? Data ?? Data()) ?? UIImage(named: "Wallpaper_1"))!).resizable().aspectRatio(contentMode: .fill).frame(height:geometry.size.height).cornerRadius(0).frame(minWidth: geometry.size.width, maxWidth:geometry.size.width, minHeight: geometry.size.height, maxHeight: geometry.size.height, alignment: .center).clipped()
+                WallpaperBackground(geometry: geometry).onTapGesture {
+                    if folder_offset == 150 && show_folder {
+                        withAnimation(.linear(duration: 0.32)) { folder_offset = 0 }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { show_folder = false }
+                    }
+                }
+                
+                if show_folder {
+                    VStack(spacing: 0) {
+                        // whatever sits above...
+                        Spacer().frame(height: 3*(UIScreen.main.bounds.width/(390/85)
+                                                  + UIScreen.main.bounds.height/(844/40) * icon_scaler))
+                        
+                        ZStack(alignment: .top) {
+                            Image("FolderSwitcherBG")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(height: 150, alignment: .top)
+                                .clipped()
+                                .mask(
+                                    FolderIsoscelesMask(triangleHeight: 18, baseWidth: 24, triangleCenterX: 10 + 1.5*UIScreen.main.bounds.width / (390/85))
+                                )
+                                .overlay(
+                                    FolderIsoscelesTopBottomBorder(triangleHeight: 18, baseWidth: 24, triangleCenterX: 10 + 1.5*UIScreen.main.bounds.width / (390/85), lineWidth: 1)
+                                        .stroke(.white.opacity(0.6), style: StrokeStyle(lineWidth: 1, lineCap: .butt, lineJoin: .miter, miterLimit: 2))
+                                )
+                                .folderInnerShadow(
+                                    using: FolderIsoscelesMask(triangleHeight: 18, baseWidth: 24, triangleCenterX: 10 + 1.5*UIScreen.main.bounds.width / (390/85)),
+                                    color: .black.opacity(0.4),
+                                    lineWidth: 8,
+                                    blur: 6,
+                                    offset: CGPoint(x: 0, y: 4)
+                                )
+                            
+                                
+                            VStack(spacing: 0) {
+                                Spacer().frame(height: 18)
+                                Spacer()
+                                HStack(spacing: 0) {
+                                    Text("Utilities").foregroundColor(.white).font(.custom("Helvetica Neue Bold", fixedSize: 20)).shadow(color: Color.black.opacity(0.9), radius: 0.75, x: 0, y: 1.75).padding(.leading, 24)
+                                    Spacer()
+                                }//.padding(.top, 28)
+                                Spacer().frame(height: 10)
+                                folder_apps(apps_scale:$apps_scale, apps_scale_height: $apps_scale_height, icon_scaler: $icon_scaler, current_view: $current_view, dock_offset: $dock_offset, folder_offset: $folder_offset, show_folder: $show_folder).scaleEffect(apps_scale).zIndex(10)
+                                Spacer()
+                                
+                            }
+                        }.allowsHitTesting(folder_offset > 0)
+                        .frame(height: 150, alignment: .top)
+                        
+                        // This is a rather obscure solution, I will admit. Our problem is we need a tappable region below the folder. Using Color.clear with a content shape instead of a spacer gives us a such a region.
+                        Color.clear
+                            .contentShape(Rectangle())  // real hit area
+                            .onTapGesture {
+                                if folder_offset == 150 && show_folder {
+                                    withAnimation(.linear(duration: 0.32)) { folder_offset = 0 }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { show_folder = false }
+                                }
+                            }
+                    }
+                    WallpaperBackgroundFolderOffset(
+                        folder_offset: folder_offset,
+                        icon_scaler: icon_scaler
+                    ).allowsHitTesting(false)
                 }
                 VStack {
                     Spacer()
@@ -470,14 +549,15 @@ struct HomeScreen: View {
                     }else {
                         LinearGradient(gradient:Gradient(colors: [Color(red: 34/255, green: 34/255, blue: 34/255).opacity(0.0), Color(red: 24/255, green: 24/255, blue: 24/255).opacity(0.85)]), startPoint: .top, endPoint: .bottom).frame(minWidth: geometry.size.width, maxWidth:geometry.size.width, minHeight: geometry.size.height/4.25, maxHeight: geometry.size.height/4.25, alignment: .center).clipped()
                     }
-                }
+                }.allowsHitTesting(false)
                 Color.black.opacity(selectedPage == 0 ? 0.65 : 0).padding(.top, 24).animation(.easeInOut, value: selectedPage)
-                VStack {
+                VStack(spacing: 0) {
                     status_bar().frame(minHeight: 24, maxHeight:24).zIndex(1)
                     Spacer().frame(height: 30)
+//                    Spacer().frame(height: folder_offset)
                     TabView(selection: $selectedPage) {
                         search(width: $search_width, height: $search_height, show_searchField: $show_searchField, apps_scale: $apps_scale, current_view: $current_view, dock_offset: $dock_offset).frame(maxWidth: geometry.size.width, maxHeight:geometry.size.height).zIndex(0).clipped().tag(0)
-                        apps(apps_scale:$apps_scale, apps_scale_height: $apps_scale_height, show_searchField: $show_searchField, icon_scaler: $icon_scaler, current_view: $current_view, dock_offset: $dock_offset, width: geometry.size.width, height: geometry.size.height).scaleEffect(apps_scale)   .animation(.easeIn).frame(maxWidth: geometry.size.width, maxHeight:geometry.size.height).zIndex(0).clipped().tag(1)    .overlay(
+                        apps(apps_scale:$apps_scale, apps_scale_height: $apps_scale_height, show_searchField: $show_searchField, icon_scaler: $icon_scaler, current_view: $current_view, dock_offset: $dock_offset, folder_offset: $folder_offset, show_folder: $show_folder, width: geometry.size.width, height: geometry.size.height).scaleEffect(apps_scale).frame(maxWidth: geometry.size.width, maxHeight:geometry.size.height).zIndex(0).clipped().tag(1)    .overlay(
                             GeometryReader { proxy in
                                 Color.clear.hidden().onAppear() {
                                     search_width = proxy.size.width
@@ -485,13 +565,13 @@ struct HomeScreen: View {
                                 }
                             }
                         )
-                        apps_second(apps_scale:$apps_scale, apps_scale_height: $apps_scale_height, show_searchField: $show_searchField, icon_scaler: $icon_scaler, current_view: $current_view, dock_offset: $dock_offset, width: geometry.size.width, height: geometry.size.height).frame(maxWidth: geometry.size.width, maxHeight:geometry.size.height).zIndex(0).clipped().tag(2).frame(width:search_width, height: search_height)
+                        apps_second(apps_scale:$apps_scale, apps_scale_height: $apps_scale_height, show_searchField: $show_searchField, icon_scaler: $icon_scaler, current_view: $current_view, dock_offset: $dock_offset, folder_offset: $folder_offset, width: geometry.size.width, height: geometry.size.height).frame(maxWidth: geometry.size.width, maxHeight:geometry.size.height).zIndex(0).clipped().tag(2).frame(width:search_width, height: search_height)
                     }.layoutPriority(1).scale(apps_scale).tabViewStyle(PageTabViewStyle(indexDisplayMode: .never)).animation(.easeInOut, value: selectedPage).onAppear() {
                         UIScrollView.appearance().bounces = false
                     }.opacity(1/(Double(dock_offset) + 1)).clipped().grayscale(show_multitasking == true ? 0.99 : 0).opacity(show_multitasking == true ? 0.3 : 1)
                     //added layout up there
-                    dock2(current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, show_multitasking: $show_multitasking).frame(width:geometry.size.width).offset(y:dock_offset).clipped()
-                }
+                    dock2(current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, show_multitasking: $show_multitasking, folder_offset: $folder_offset).frame(maxWidth:geometry.size.width, maxHeight: 150 - folder_offset).offset(y:dock_offset).offset(y:folder_offset/1.5).clipped()
+                }.allowsHitTesting(folder_offset == 0)
                 VStack {
                     Spacer()
                     HStack() {
@@ -530,8 +610,8 @@ struct HomeScreen: View {
                         } label: {
                             Color.clear.frame(width: geometry.size.width/2.4, height:7.9)
                         }
-                    }.padding(.bottom, 110).offset(y:dock_offset).offset(y:bottom_indicator_offset)
-                }.opacity(show_multitasking == true ? 0 : 1)
+                    }.padding(.bottom, 110).offset(y:dock_offset).offset(y:bottom_indicator_offset).offset(y:folder_offset).allowsHitTesting(folder_offset == 0)
+                }.opacity(show_multitasking == true ? 0 : 1).allowsHitTesting(folder_offset == 0)
             }.onAppear() {
                 //MARK — iPhone 8
                 if UIScreen.main.bounds.width == 375 && UIScreen.main.bounds.height == 667 {
@@ -551,6 +631,165 @@ struct HomeScreen: View {
         }
     }
 }
+
+import SwiftUI
+
+struct WallpaperBackground: View {
+    let geometry: GeometryProxy
+    @State private var cachedWallpaper: UIImage?
+    private let userDefaults = UserDefaults.standard
+    
+    private let wallpaperChangePublisher = NotificationCenter.default.publisher(
+        for: UserDefaults.didChangeNotification
+    )
+
+    var body: some View {
+        ZStack {
+            if userDefaults.bool(forKey: "Camera_Wallpaper_Home") == false {
+                // Regular wallpaper from assets or filename
+                Image(userDefaults.string(forKey: "Home_Wallpaper") ?? "Wallpaper_1")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: geometry.size.height)
+                    .frame(minWidth: geometry.size.width,
+                           maxWidth: geometry.size.width,
+                           minHeight: geometry.size.height,
+                           maxHeight: geometry.size.height,
+                           alignment: .center)
+                    .cornerRadius(0)
+                    .clipped()
+            } else {
+                // Cached data-based wallpaper (decoded once)
+                if let ui = cachedWallpaper {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: geometry.size.height)
+                        .frame(minWidth: geometry.size.width,
+                               maxWidth: geometry.size.width,
+                               minHeight: geometry.size.height,
+                               maxHeight: geometry.size.height,
+                               alignment: .center)
+                        .cornerRadius(0)
+                        .clipped()
+                } else {
+                    // Fallback image while cache loads
+                    Image("Wallpaper_1")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: geometry.size.height)
+                        .frame(minWidth: geometry.size.width,
+                               maxWidth: geometry.size.width,
+                               minHeight: geometry.size.height,
+                               maxHeight: geometry.size.height,
+                               alignment: .center)
+                        .cornerRadius(0)
+                        .clipped()
+                }
+            }
+        }
+        .onAppear(perform: loadWallpaperOnce)
+        .onReceive(wallpaperChangePublisher) { _ in
+                  loadWallpaperOnce()
+              }
+    }
+
+    // Decode once and match screen scale
+    private func loadWallpaperOnce() {
+        guard userDefaults.bool(forKey: "Camera_Wallpaper_Home") == true else { return }
+        if let data = userDefaults.data(forKey: "Home_Wallpaper"),
+           let ui = UIImage(data: data, scale: UIScreen.main.scale)?
+                .preparingForDisplay() {
+            cachedWallpaper = ui
+        } else {
+            cachedWallpaper = UIImage(named: "Wallpaper_1")?.preparingForDisplay()
+        }
+    }
+}
+
+
+struct WallpaperBackgroundFolderOffset: View {
+    let folder_offset: CGFloat
+    let icon_scaler: CGFloat
+    @State private var cachedWallpaper: UIImage?
+    let userDefaults = UserDefaults.standard
+    
+    private let wallpaperChangePublisher = NotificationCenter.default.publisher(
+        for: UserDefaults.didChangeNotification
+    )
+
+    var body: some View {
+        ZStack {
+            if userDefaults.bool(forKey: "Camera_Wallpaper_Home") == false {
+                wallpaperImage(
+                    Image(userDefaults.string(forKey: "Home_Wallpaper") ?? "Wallpaper_1")
+                )
+            } else {
+                if let ui = cachedWallpaper {
+                    wallpaperImage(Image(uiImage: ui))
+                } else {
+                    wallpaperImage(Image("Wallpaper_1"))
+                }
+            }
+        }
+        .onAppear(perform: loadWallpaperOnce)
+        .onReceive(wallpaperChangePublisher) { _ in
+                  loadWallpaperOnce()
+              }
+    }
+
+    @ViewBuilder
+    private func wallpaperImage(_ img: Image) -> some View {
+        GeometryReader { geometry in
+            img
+                .renderingMode(.original)
+                .resizable()
+                .interpolation(.high)
+                .antialiased(true)
+                .aspectRatio(contentMode: .fill)
+                .frame(height: geometry.size.height)
+                .frame(minWidth: geometry.size.width, maxWidth: geometry.size.width,
+                       minHeight: geometry.size.height, maxHeight: geometry.size.height)
+                .offset(y: folder_offset > 50 ? -18 : 0)
+                .compositingGroup()
+                .mask(
+                    VStack(spacing: 0) {
+                        Spacer().frame(height: 3*(UIScreen.main.bounds.width/(390/85)
+                                                  + UIScreen.main.bounds.height/(844/40) * icon_scaler))
+                        FolderIsoscelesMask(
+                            triangleHeight: folder_offset > 50 ? 0 : 18,
+                            baseWidth: 24,
+                            triangleCenterX: 10 + 1.5*UIScreen.main.bounds.width / (390/85)
+                        )
+                        .frame(
+                            width: geometry.size.width,
+                            height: geometry.size.height
+                                   - 3*(UIScreen.main.bounds.width/(390/85)
+                                   + UIScreen.main.bounds.height/(844/40) * icon_scaler),
+                            alignment: .top
+                        )
+                    }
+                )
+                .allowsHitTesting(false)
+                .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: -4)
+        }
+        .clipped()
+        .offset(y: folder_offset)
+    }
+
+    private func loadWallpaperOnce() {
+        guard userDefaults.bool(forKey: "Camera_Wallpaper_Home") == true else { return }
+        if let data = userDefaults.data(forKey: "Home_Wallpaper"),
+           let ui = UIImage(data: data, scale: UIScreen.main.scale)?
+                .preparingForDisplay() {
+            cachedWallpaper = ui
+        } else {
+            cachedWallpaper = UIImage(named: "Wallpaper_1")?.preparingForDisplay()
+        }
+    }
+}
+
+
 struct NoButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -677,8 +916,12 @@ struct apps: View {
     @Binding var icon_scaler: CGFloat
     @Binding var current_view: String
     @Binding var dock_offset: CGFloat
+    @Binding var folder_offset: CGFloat
+    @Binding var show_folder: Bool
     var width: CGFloat
     var height: CGFloat
+    
+    var userDefaults = UserDefaults.standard
     
     var body: some View {
         VStack {
@@ -688,20 +931,20 @@ struct apps: View {
                 GridItem(.fixed(UIScreen.main.bounds.width / (390/85)), spacing: 1),
                 GridItem(.fixed(UIScreen.main.bounds.width / (390/85)), spacing: 1)
             ], spacing: UIScreen.main.bounds.height / (844 / 40) * icon_scaler) {
-                app(image_name: "Messages", app_name: "Messages", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app_calendar(image_name: "Calendar", app_name: "Calendar", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "Photos", app_name: "Photos", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "Camera", app_name: "Camera", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "YouTube", app_name: "YouTube", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "Stocks", app_name: "Stocks", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "Maps", app_name: "Maps", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "Weather Fahrenheit", app_name: "Weather", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "Notes", app_name: "Notes", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "Utilities", app_name: "Utilities", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "iTunes", app_name: "iTunes", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "App Store", app_name: "App Store", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "Game Center", app_name: "Game Center", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                app(image_name: "Settings", app_name: "Settings", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
+                app(image_name: "Messages", app_name: "Messages", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app_calendar(image_name: "Calendar", app_name: "Calendar", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app(image_name: "Photos", app_name: "Photos", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app(image_name: "Camera", app_name: "Camera", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app(image_name: "YouTube", app_name: "YouTube", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app(image_name: "Stocks", app_name: "Stocks", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app(image_name: "Maps", app_name: "Maps", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app(image_name: "Weather Fahrenheit", app_name: "Weather", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app(image_name: "Notes", app_name: "Notes", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                folder(image_name: "Utilities", folder_name: "Utilities", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset, show_folder: $show_folder)
+                app(image_name: "iTunes", app_name: "iTunes", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app(image_name: "App Store", app_name: "App Store", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                app(image_name: "Game Center", app_name: "Game Center", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset).offset(y: folder_offset > 50 ? folder_offset / (folder_offset - folder_offset * (folder_offset - 19) / (folder_offset - 18)) : folder_offset)
+                app(image_name: "Settings", app_name: "Settings", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset).offset(y: folder_offset > 50 ? folder_offset / (folder_offset - folder_offset * (folder_offset - 19) / (folder_offset - 18)) : folder_offset)
             }
             Spacer()
         }.onAppear() {
@@ -710,6 +953,137 @@ struct apps: View {
     }
 }
 
+struct folder_apps: View {
+    @Binding var apps_scale: CGFloat
+    @Binding var apps_scale_height: CGFloat
+    @Binding var icon_scaler: CGFloat
+    @Binding var current_view: String
+    @Binding var dock_offset: CGFloat
+    @Binding var folder_offset: CGFloat
+    @Binding var show_folder: Bool
+    
+    var userDefaults = UserDefaults.standard
+    
+    var body: some View {
+            LazyVGrid(columns: [
+                GridItem(.fixed(UIScreen.main.bounds.width / (390/85)), spacing: 1),
+                GridItem(.fixed(UIScreen.main.bounds.width / (390/85)), spacing: 1),
+                GridItem(.fixed(UIScreen.main.bounds.width / (390/85)), spacing: 1),
+                GridItem(.fixed(UIScreen.main.bounds.width / (390/85)), spacing: 1)
+            ], spacing: UIScreen.main.bounds.height / (844 / 40) * icon_scaler) {
+                app(image_name: "Clock", app_name: "Clock", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset, is_folder_app: true)
+                app(image_name: "Calculator", app_name: "Calculator", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset, is_folder_app: true)
+                app(image_name: "Compass", app_name: "Compass", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset, is_folder_app: true)
+                app(image_name: "Voice Memos  4.2.1", app_name: "Voice Memos", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset, is_folder_app: true)
+            }.onAppear() {
+            UIApplication.shared.endEditing()
+        }//.offset(y:-15)
+    }
+}
+
+@inline(__always)
+private func equilateralHalfBase(forHeight h: CGFloat) -> CGFloat {
+    h / CGFloat(sqrt(3))
+}
+
+struct FolderIsoscelesMask: Shape {
+    var triangleHeight: CGFloat = 22
+    var baseWidth: CGFloat = 22
+    var triangleCenterX: CGFloat = 0
+
+    var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
+        get { .init(triangleHeight, .init(baseWidth, triangleCenterX)) }
+        set { triangleHeight = newValue.first
+              baseWidth = newValue.second.first
+              triangleCenterX = newValue.second.second }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let h = max(0, min(triangleHeight, rect.height))
+        let halfBase = max(0, baseWidth / 2)
+        let cx = triangleCenterX
+
+        p.move(to: CGPoint(x: cx, y: 0))                // apex
+        p.addLine(to: CGPoint(x: cx + halfBase, y: h))  // base right
+        p.addLine(to: CGPoint(x: cx - halfBase, y: h))  // base left
+        p.closeSubpath()
+
+        p.addRect(CGRect(x: 0, y: h, width: rect.width, height: rect.height - h))
+        return p
+    }
+}
+
+struct FolderIsoscelesTopBottomBorder: Shape {
+    var triangleHeight: CGFloat = 22
+    var baseWidth: CGFloat = 22
+    var triangleCenterX: CGFloat = 0
+    var lineWidth: CGFloat = 2
+
+    var animatableData: AnimatablePair<CGFloat, AnimatablePair<CGFloat, CGFloat>> {
+        get { .init(triangleHeight, .init(baseWidth, triangleCenterX)) }
+        set { triangleHeight = newValue.first
+              baseWidth = newValue.second.first
+              triangleCenterX = newValue.second.second }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let h = max(0, min(triangleHeight, rect.height))
+        let halfBase = max(0, baseWidth / 2)
+        let cx = triangleCenterX
+
+        let oddAdjust: CGFloat = (Int(lineWidth) % 2 == 1) ? 0.5 : 0.0
+        let topY    = h + oddAdjust
+        let bottomY = rect.maxY - oddAdjust
+
+        let leftBase  = CGPoint(x: cx - halfBase, y: topY)
+        let rightBase = CGPoint(x: cx + halfBase, y: topY)
+        let apex      = CGPoint(x: cx,            y: 0 + oddAdjust)
+
+        if leftBase.x > 0 {
+            p.move(to: CGPoint(x: 0, y: topY))
+            p.addLine(to: leftBase)
+        }
+
+        p.move(to: leftBase)
+        p.addLine(to: apex)
+        p.addLine(to: rightBase)
+
+        if rightBase.x < rect.maxX {
+            p.move(to: rightBase)
+            p.addLine(to: CGPoint(x: rect.maxX, y: topY))
+        }
+
+        p.move(to: CGPoint(x: 0, y: bottomY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: bottomY))
+
+        return p
+    }
+}
+
+
+extension View {
+    func folderInnerShadow<S: Shape>(
+        using shape: S,
+        color: Color = .black,
+        lineWidth: CGFloat = 4,
+        blur: CGFloat = 6,
+        offset: CGPoint = .init(x: 0, y: 2)
+    ) -> some View {
+        self
+            .overlay(
+                shape
+                    .stroke(color, lineWidth: lineWidth)
+                    .offset(x: offset.x, y: offset.y)
+                    .blur(radius: blur)
+                    .mask(shape)
+            )
+    }
+}
+
+
+
 struct apps_second: View {
     @Binding var apps_scale: CGFloat
     @Binding var apps_scale_height: CGFloat
@@ -717,6 +1091,7 @@ struct apps_second: View {
     @Binding var icon_scaler: CGFloat
     @Binding var current_view: String
     @Binding var dock_offset: CGFloat
+    @Binding var folder_offset: CGFloat
     var width: CGFloat
     var height: CGFloat
     
@@ -728,7 +1103,7 @@ struct apps_second: View {
                 GridItem(.fixed(UIScreen.main.bounds.width/(390/85)), spacing: 1),
                 GridItem(.fixed(UIScreen.main.bounds.width/(390/85)), spacing: 1)
             ], alignment: .center, spacing: UIScreen.main.bounds.height/(844/40)*icon_scaler) {
-                app(image_name: "Contacts", app_name: "Contacts", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
+                app(image_name: "Contacts", app_name: "Contacts", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
                 
             }
             Spacer().frame(height:UIScreen.main.bounds.height/(844/40)*icon_scaler)
@@ -902,6 +1277,68 @@ struct multitasking_app: View {
     }
 }
 
+struct folder: View {
+    var image_name: String
+    var folder_name: String
+    @State var pressed = false
+    @Binding var current_view: String
+    @Binding var apps_scale: CGFloat
+    @Binding var dock_offset: CGFloat
+    @Binding var folder_offset: CGFloat
+    @Binding var show_folder: Bool
+    var body: some View {
+        Button(action: {
+            DispatchQueue.main.asyncAfter(deadline:.now() + 0.01) {
+                if folder_offset == 150 {
+                    withAnimation(.linear(duration: 0.32)) {
+                        folder_offset = 0
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
+                        show_folder = false
+                    }
+                } else {
+                    show_folder = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                        withAnimation(.linear(duration: 0.32)) {
+                            folder_offset = 150
+                        }
+                    }
+                }
+            }
+        }) {
+            VStack {
+                ZStack {
+                    if pressed {
+                        Rectangle().fill(Color.gray).frame(width: UIScreen.main.bounds.width/(390/60), height: UIScreen.main.bounds.width/(390/60)).cornerRadius(14)
+                    }
+                    Image("Folder").resizable().scaledToFit().frame(width: UIScreen.main.bounds.width/(390/60))
+                    VStack(alignment: .center) {
+                        LazyVGrid(columns: [
+                            GridItem(.fixed(UIScreen.main.bounds.width / (390/85*6.5)), spacing: UIScreen.main.bounds.width/(390/60) / (844/40)),
+                            GridItem(.fixed(UIScreen.main.bounds.width / (390/85*6.5)), spacing: UIScreen.main.bounds.width/(390/60) / (844/40)),
+                            GridItem(.fixed(UIScreen.main.bounds.width / (390/85*6.5)), spacing: UIScreen.main.bounds.width/(390/60) / (844/40))
+                        ], spacing: UIScreen.main.bounds.width/(390/60) / (844/40)) {
+                            app_folder(image_name: "Clock-Small", app_name: "Clock", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
+                            app_folder(image_name: "Calculator-Small", app_name: "Calculator", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
+                            app_folder(image_name: "Compass-Small", app_name: "Compass", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
+                            app_folder(image_name: "Voice Memos-Small", app_name: "Voice Memos", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
+                        }.frame(width: UIScreen.main.bounds.width/(390/60)).padding([.top], UIScreen.main.bounds.width/(390/60) / (844/40)*2.65).padding(.leading, UIScreen.main.bounds.width/(390/60) / (844/40*100))
+                        Spacer()
+                    }
+                }
+                Text(folder_name).foregroundColor(.white).font(.custom("Helvetica Neue Medium", fixedSize: 13)).shadow(color: Color.black.opacity(0.9), radius: 0.75, x: 0, y: 1.75).offset(y: -4)
+            }
+        }.background(returnedBK(for: true))
+    }
+    private func returnedBK(for app: Bool) -> some View {
+        if app {
+            return AnyView(Image("WallpaperIconShadow").resizable().scaledToFit().frame(width:UIScreen.main.bounds.width/(390/104)).offset(y:6))
+        } else {
+            return AnyView(EmptyView())
+        }
+    }
+}
+
 
 struct app: View {
     var image_name: String
@@ -910,12 +1347,17 @@ struct app: View {
     @Binding var current_view: String
     @Binding var apps_scale: CGFloat
     @Binding var dock_offset: CGFloat
+    @Binding var folder_offset: CGFloat
+    var is_folder_app: Bool = false
+    
     var body: some View {
         Button(action: {
-            if app_name != "Utilities" {
-                withAnimation(.linear(duration: 0.32)) {
-                    apps_scale = 4
-                    dock_offset = 100
+            if !["Clock", "Calculator", "Voice Memos"].contains(app_name) {
+                if !is_folder_app {
+                    withAnimation(.linear(duration: 0.32)) {
+                        apps_scale = 4
+                        dock_offset = 100
+                    }
                 }
                 DispatchQueue.main.asyncAfter(deadline:.now()+0.01) {
                     withAnimation(.linear(duration: 0.32)) {
@@ -933,7 +1375,7 @@ struct app: View {
                 }
                 Text(app_name).foregroundColor(.white).font(.custom("Helvetica Neue Medium", fixedSize: 13)).shadow(color: Color.black.opacity(0.9), radius: 0.75, x: 0, y: 1.75).offset(y: -4)
             }
-        }.background(returnedBK(for: app_name != "Phone" && app_name != "Mail" && app_name != "Safari" && app_name != "iPod" ? true : false))
+        }.background(returnedBK(for: app_name != "Phone" && app_name != "Mail" && app_name != "Safari" && app_name != "iPod" ? true : false)).grayscale((folder_offset > 0 && !is_folder_app) ? 0.99 : 0).opacity((folder_offset > 0 && !is_folder_app) ? 0.3 : 1)
     }
     private func returnedBK(for app: Bool) -> some View {
         if app {
@@ -949,6 +1391,7 @@ struct app_calendar: View {
     @Binding var current_view: String
     @Binding var apps_scale: CGFloat
     @Binding var dock_offset: CGFloat
+    @Binding var folder_offset: CGFloat
     @State var date = Date()
     var timeFormat: DateFormatter {
         let formatter = DateFormatter()
@@ -981,7 +1424,7 @@ struct app_calendar: View {
                 }
                 Text(app_name).foregroundColor(.white).font(.custom("Helvetica Neue Medium", fixedSize: 13)).shadow(color: Color.black.opacity(0.9), radius: 0.75, x: 0, y: 1.75).offset(y: -4)
             }
-        }.background(Image("WallpaperIconShadow").resizable().scaledToFit().frame(width:UIScreen.main.bounds.width/(390/104)).offset(y:6))
+        }.background(Image("WallpaperIconShadow").resizable().scaledToFit().frame(width:UIScreen.main.bounds.width/(390/104)).offset(y:6)).grayscale(folder_offset > 0 ? 0.99 : 0).opacity(folder_offset > 0 ? 0.3 : 1)
     }
     func timeString(date: Date) -> String {
         let time = timeFormat.string(from: date)
@@ -992,6 +1435,22 @@ struct app_calendar: View {
         return Calendar.current.weekdaySymbols[index - 1]
     }
 }
+
+struct app_folder: View {
+    var image_name: String
+    var app_name: String
+    @Binding var current_view: String
+    @Binding var apps_scale: CGFloat
+    @Binding var dock_offset: CGFloat
+    var body: some View {
+            VStack {
+                ZStack {
+                    Image(image_name).resizable().scaledToFit()
+                }
+            }
+        }
+}
+
 struct app_reflection: View {
     var image_name: String
     var app_name: String
@@ -1122,6 +1581,7 @@ struct dock2: View {
     @Binding var apps_scale: CGFloat
     @Binding var dock_offset: CGFloat
     @Binding var show_multitasking: Bool
+    @Binding var folder_offset: CGFloat
     var columns: [GridItem] = [
         GridItem(.fixed(UIScreen.main.bounds.width/(390/85)), spacing: 1),
         GridItem(.fixed(UIScreen.main.bounds.width/(390/85)), spacing: 1),
@@ -1144,10 +1604,10 @@ struct dock2: View {
                         app_reflection(image_name: "iPod", app_name: "iPod").rotationEffect(.degrees(180)).opacity(0.4) .offset(y:35) .clipped().offset(y:12)
                     }
                     LazyVGrid(columns: columns, alignment: .center, spacing: UIScreen.main.bounds.height/(844/40)) {
-                        app(image_name: "Phone", app_name: "Phone", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                        app(image_name: "Mail", app_name: "Mail", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                        app(image_name: "Safari", app_name: "Safari", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
-                        app(image_name: "iPod", app_name: "iPod", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset)
+                        app(image_name: "Phone", app_name: "Phone", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                        app(image_name: "Mail", app_name: "Mail", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                        app(image_name: "Safari", app_name: "Safari", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
+                        app(image_name: "iPod", app_name: "iPod", current_view: $current_view, apps_scale: $apps_scale, dock_offset: $dock_offset, folder_offset: $folder_offset)
                     }.offset(y: 0) .compositingGroup() .drawingGroup()
                 }
             }.grayscale(show_multitasking == true ? 0.99 : 0).opacity(show_multitasking == true ? 0.3 : 1)
@@ -1181,9 +1641,9 @@ private struct IfButtonShapesEnabledModifier<S: View>: ViewModifier {
         let base = AnyView(content)
         Group {
             if enabled {
-                style(base)      // apply your style when Button Shapes is ON
+                style(base)
             } else {
-                base             // leave as-is when it's OFF
+                base
             }
         }
         .onReceive(NotificationCenter.default.publisher(
