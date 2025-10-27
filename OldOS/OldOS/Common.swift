@@ -1856,6 +1856,7 @@ struct tool_bar_rectangle_button: View {
         }.frame(height: 32 + (height_modifier ?? 0))
     }
 }
+
 struct tool_bar_rectangle_button_gray_out: View {
     public var action: (() -> Void)?
     var button_type: tool_bar_button_type
@@ -1893,6 +1894,27 @@ struct tool_bar_rectangle_button_image_done_size: View { //Is this a bad solutio
 
                 Text("Done").font(.custom("Helvetica Neue Bold", fixedSize: 13.25)).foregroundColor(.white).shadow(color: Color.black.opacity(0.75), radius: 1, x: 0, y: -0.25).lineLimit(0).padding([.leading, .trailing], 11).opacity(0)
                 
+            }.frame(height: 32 + (height_modifier ?? 0)).ps_innerShadow(.roundedRectangle(5.5, returnLinearGradient(button_type)), radius:0.8, offset: CGPoint(0, 0.6), intensity: 0.7).shadow(color: Color.white.opacity(0.28), radius: 0, x: 0, y: 0.8)
+        }.frame(height: 32 + (height_modifier ?? 0))
+    }
+}
+
+struct tool_bar_rectangle_button_smaller_image: View {
+    public var action: (() -> Void)?
+    var button_type: tool_bar_button_type
+    var content: String
+    var use_image: Bool?
+    var height_modifier: CGFloat? = 0
+    private let gray_gradient = LinearGradient([(color: Color(red: 164/255, green: 175/255, blue:191/255), location: 0), (color: Color(red: 124/255, green: 141/255, blue:164/255), location: 0.51), (color: Color(red: 113/255, green: 131/255, blue:156/255), location: 0.51), (color: Color(red: 112/255, green: 130/255, blue:155/255), location: 1)], from: .top, to: .bottom)
+    private let blue_gradient = LinearGradient([(color: Color(red: 120/255, green: 158/255, blue:237/255), location: 0), (color: Color(red: 55/255, green: 110/255, blue:224/255), location: 0.51), (color: Color(red: 34/255, green: 96/255, blue:221/255), location: 0.52), (color: Color(red: 36/255, green: 100/255, blue:224/255), location: 1)], from: .top, to: .bottom)
+    var body: some View {
+        Button(action:{action?()}) {
+            ZStack {
+                if use_image == true {
+                    Image(content).resizable().scaledToFit().frame(width: 7).padding([.leading, .trailing], 13)
+                } else {
+                Text(content).font(.custom("Helvetica Neue Bold", fixedSize: 13.25)).foregroundColor(.white).shadow(color: Color.black.opacity(0.75), radius: 1, x: 0, y: -0.25).lineLimit(0).padding([.leading, .trailing], 11)
+                }
             }.frame(height: 32 + (height_modifier ?? 0)).ps_innerShadow(.roundedRectangle(5.5, returnLinearGradient(button_type)), radius:0.8, offset: CGPoint(0, 0.6), intensity: 0.7).shadow(color: Color.white.opacity(0.28), radius: 0, x: 0, y: 0.8)
         }.frame(height: 32 + (height_modifier ?? 0))
     }
