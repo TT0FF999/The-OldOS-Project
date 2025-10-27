@@ -18,13 +18,14 @@ struct Messages: View {
                 VStack(spacing:0) {
                     status_bar_in_app().frame(minHeight: 24, maxHeight:24).zIndex(1)
                     messages_title_bar(title: "Messages").frame(minWidth: geometry.size.width, maxWidth: geometry.size.width, minHeight: 60, maxHeight:60).zIndex(1)
+                    // *** Add the code 
                     VStack {
                     ForEach(0..<Int(geometry.size.height/80)) {_ in
                         Spacer()
                         Rectangle().fill(Color(red: 224/255, green: 224/255, blue: 224/255)).frame(height: 1)
                     }
-                    }
                 }
+                // *** End of the app code 
             }.background(Color.white).compositingGroup().clipped()
         }
     }
