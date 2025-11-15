@@ -6,408 +6,299 @@
 //
 
 import SwiftUI
-import SQLite3
 import Foundation
+import SQLite3
+import UIKit
 
-// ---------------------------
-// MARK: - Models
-// ---------------------------
+// MARK: - MODELS
 
-struct Conversation: Identifiable {
-    let id: Int64
-    var displayName: String?
-    var lastMessageText: String?
-    var lastMessageDate: Date?
+struct SMSConversation: Identifiable {
+    var id: Int
+    var handle: String
+    var lastMessage: String
+    var lastDate: Date
 }
 
-struct MessageModel: Identifiable {
-    let id: Int64
-    let text: String?
-    let date: Date?
-    let isFromMe: Bool
-    let handle: String?
+struct SMSMessage: Identifiable {
+    var id: Int
+    var text: String?
+    var isFromMe: Bool
+    var date: Date
+    var attachmentPath: String?
 }
 
+// MARK: - DATABASE
 
-// ---------------------------
-// MARK: - SQLite Reader
-// ---------------------------
+class SMSDatabase {
+    static let shared = SMSDatabase()
+    private var db: OpaquePointer?
 
-final class SQLiteSMS {
-    private var db: OpaquePointer? = nil
-    private(set) var dbPath: String
-    
-    // MARK: init
-    init?(bundleDBName: String = "sms") {
-        guard let url = Bundle.main.url(forResource: bundleDBName, withExtension: "db") else {
-            print("❌ sms.db introuvable")
-            return nil
-        }
-        dbPath = url.path
-        
-        if sqlite3_open_v2(dbPath, &db, SQLITE_OPEN_READONLY, nil) != SQLITE_OK {
-            print("❌ Impossible d’ouvrir la DB")
-            db = nil
-            return nil
+    private init() {
+        openDatabase()
+    }
+
+    private func dbPath() -> String {
+        return "/var/mobile/Library/SMS/sms.db"
+    }
+
+    private func openDatabase() {
+        if sqlite3_open(dbPath(), &db) != SQLITE_OK {
+            print("ERREUR ouverture DB")
         }
     }
-    
-    deinit { sqlite3_close(db) }
-    
-    // MARK: timestamp normalisation
-    private func normalizeTimestamp(_ raw: Int64) -> Date {
-        let now = Date().timeIntervalSince1970
-        var seconds = Double(raw)
-        
-        switch raw {
-            case 1_000_000_000_000...9_000_000_000_000:
-                seconds /= 1000.0
-            case 10_000_000_000_000...:
-                seconds /= 1_000_000.0
-            default: break
-        }
-        
-        var date = Date(timeIntervalSince1970: seconds)
-        
-        // Correction si timestamp Cocoa (depuis 2001)
-        if date.timeIntervalSince1970 > now + 31536000 || date.timeIntervalSince1970 < 946684800 {
-            date = Date(timeIntervalSince1970: seconds - 978307200)
-        }
-        return date
-    }
-    
-    // MARK: fetch Conversations
-    func fetchConversations(limit: Int = 200) -> [Conversation] {
-        var results: [Conversation] = []
-        
-        let sql = """
-        SELECT
-          chat.ROWID,
-          chat.display_name,
-          (SELECT message.text FROM message
-             JOIN chat_message_join cmj ON cmj.message_id = message.ROWID
-             WHERE cmj.chat_id = chat.ROWID
-             ORDER BY message.date DESC LIMIT 1),
-          (SELECT message.date FROM message
-             JOIN chat_message_join cmj ON cmj.message_id = message.ROWID
-             WHERE cmj.chat_id = chat.ROWID
-             ORDER BY message.date DESC LIMIT 1)
+
+    // MARK: - get conversations
+
+    func fetchConversations() -> [SMSConversation] {
+        let q = """
+        SELECT chat.ROWID, handle.id, message.text, message.date
         FROM chat
-        ORDER BY last_date DESC
-        LIMIT ?
+        JOIN chat_handle_join ON chat_handle_join.chat_id = chat.ROWID
+        JOIN handle ON handle.ROWID = chat_handle_join.handle_id
+        JOIN chat_message_join ON chat_message_join.chat_id = chat.ROWID
+        JOIN message ON message.ROWID = chat_message_join.message_id
+        GROUP BY chat.ROWID
+        ORDER BY message.date DESC;
         """
-        
+
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
-        sqlite3_bind_int(stmt, 1, Int32(limit))
-        
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let id = sqlite3_column_int64(stmt, 0)
-            let display = stmt.stringCol(1)
-            let lastText = stmt.stringCol(2)
-            
-            var dateObj: Date? = nil
-            if stmt.hasValue(3) {
-                let raw = sqlite3_column_int64(stmt, 3)
-                dateObj = normalizeTimestamp(raw)
+        var arr: [SMSConversation] = []
+
+        if sqlite3_prepare_v2(db, q, -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+
+                let id = Int(sqlite3_column_int(stmt, 0))
+                let handleC = sqlite3_column_text(stmt, 1)
+                let msgC = sqlite3_column_text(stmt, 2)
+                let dateI = sqlite3_column_int(stmt, 3)
+
+                let handle = handleC != nil ? String(cString: handleC!) : "?"
+                let msg = msgC != nil ? String(cString: msgC!) : ""
+                let date = Date(timeIntervalSince1970: TimeInterval(dateI))
+
+                arr.append(SMSConversation(id: id, handle: handle, lastMessage: msg, lastDate: date))
             }
-            
-            results.append(Conversation(
-                id: id,
-                displayName: display,
-                lastMessageText: lastText,
-                lastMessageDate: dateObj
-            ))
         }
+
         sqlite3_finalize(stmt)
-        return results
+        return arr
     }
-    
-    // MARK: fetch messages
-    func fetchMessages(forChatId chatId: Int64) -> [MessageModel] {
-        var results: [MessageModel] = []
-        
-        let sql = """
-        SELECT message.ROWID,
-               message.text,
-               message.date,
-               message.is_from_me,
-               COALESCE(handle.id, '')
-        FROM message
-        JOIN chat_message_join cmj ON cmj.message_id = message.ROWID
-        LEFT JOIN handle ON message.handle_id = handle.ROWID
-        WHERE cmj.chat_id = ?
-        ORDER BY message.date ASC
+
+    // MARK: - get messages
+
+    func fetchMessages(forChat id: Int) -> [SMSMessage] {
+
+        let q = """
+        SELECT message.ROWID, message.text, message.is_from_me, message.date, attachment.filename
+        FROM chat_message_join
+        JOIN message ON message.ROWID = chat_message_join.message_id
+        LEFT JOIN attachment ON attachment.message_id = message.ROWID
+        WHERE chat_message_join.chat_id = \(id)
+        ORDER BY message.date ASC;
         """
-        
+
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
-        
-        sqlite3_bind_int64(stmt, 1, chatId)
-        
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let id = sqlite3_column_int64(stmt, 0)
-            let text = stmt.stringCol(1)
-            let handle = stmt.stringCol(4)
-            
-            let date = stmt.hasValue(2) ? normalizeTimestamp(sqlite3_column_int64(stmt, 2)) : nil
-            let isFromMe = sqlite3_column_int(stmt, 3) != 0
-            
-            results.append(MessageModel(
-                id: id, text: text, date: date,
-                isFromMe: isFromMe, handle: handle
-            ))
+        var arr: [SMSMessage] = []
+
+        if sqlite3_prepare_v2(db, q, -1, &stmt, nil) == SQLITE_OK {
+
+            while sqlite3_step(stmt) == SQLITE_ROW {
+
+                let mid = Int(sqlite3_column_int(stmt, 0))
+                let textC = sqlite3_column_text(stmt, 1)
+                let from = sqlite3_column_int(stmt, 2) == 1
+                let dateI = sqlite3_column_int(stmt, 3)
+                let attachC = sqlite3_column_text(stmt, 4)
+
+                let text = textC != nil ? String(cString: textC!) : nil
+                let date = Date(timeIntervalSince1970: TimeInterval(dateI))
+
+                var attach: String?
+                if let a = attachC {
+                    let file = String(cString: a)
+                    attach = "/var/mobile/Library/SMS/Attachments/\(file)"
+                }
+
+                arr.append(
+                    SMSMessage(id: mid, text: text, isFromMe: from, date: date, attachmentPath: attach)
+                )
+            }
         }
+
         sqlite3_finalize(stmt)
-        return results
+        return arr
     }
 }
 
+// MARK: - LIST VIEW (iOS 6 style)
 
-// ---------------------------
-// MARK: - SQLite helpers
-// ---------------------------
+struct MessagesListView: View {
+    @State var conversations: [SMSConversation] = []
+    @State var selectedChat: SMSConversation?
 
-private extension OpaquePointer {
-    func stringCol(_ idx: Int32) -> String? {
-        guard sqlite3_column_type(self, idx) != SQLITE_NULL,
-              let c = sqlite3_column_text(self, idx) else { return nil }
-        return String(cString: c)
-    }
-    
-    func hasValue(_ idx: Int32) -> Bool {
-        sqlite3_column_type(self, idx) != SQLITE_NULL
-    }
-}
-
-
-// ---------------------------
-// MARK: - Formatters (optimisé)
-// ---------------------------
-
-fileprivate let shortFormatter: DateFormatter = {
-    let f = DateFormatter()
-    f.timeStyle = .short
-    f.dateStyle = .none
-    return f
-}()
-
-fileprivate let longFormatter: DateFormatter = {
-    let f = DateFormatter()
-    f.dateStyle = .medium
-    f.timeStyle = .short
-    return f
-}()
-
-
-// ---------------------------
-// MARK: - UI Components
-// ---------------------------
-
-struct ConversationRow: View {
-    let convo: Conversation
-    
     var body: some View {
-        HStack(spacing:12) {
-            Circle()
-                .frame(width:44, height:44)
-                .overlay(Text(initials(from: convo.displayName)).bold())
-                .opacity(0.12)
-            
-            VStack(alignment:.leading) {
-                HStack {
-                    Text(convo.displayName ?? "Unknown")
-                        .font(.system(size:16, weight:.semibold))
-                    Spacer()
-                    if let d = convo.lastMessageDate {
-                        Text(shortFormatter.string(from: d))
+        NavigationView {
+            List(conversations) { c in
+                NavigationLink(destination: ChatView(chat: c)) {
+                    HStack {
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 40, height: 40)
+                            .overlay(Text(String(c.handle.prefix(1))).font(.headline))
+
+                        VStack(alignment: .leading) {
+                            Text(c.handle)
+                                .font(.system(size: 18, weight: .bold))
+
+                            Text(c.lastMessage)
+                                .lineLimit(1)
+                                .foregroundColor(.gray)
+                                .font(.system(size: 15))
+                        }
+
+                        Spacer()
+
+                        Text(shortDate(c.lastDate))
                             .foregroundColor(.gray)
-                            .font(.system(size:12))
+                            .font(.system(size: 13))
                     }
+                    .padding(.vertical, 6)
                 }
-                Text(convo.lastMessageText ?? "")
-                    .font(.system(size:14))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
+            }
+            .navigationBarTitle("Messages", displayMode: .inline)
+            .onAppear {
+                conversations = SMSDatabase.shared.fetchConversations()
             }
         }
-        .padding(.vertical,8)
     }
-    
-    private func initials(from s: String?) -> String {
-        guard let s = s else { return "?" }
-        let parts = s.split(separator: " ")
-        if parts.count > 1 { return "\(parts[0].first!)\(parts[1].first!)".uppercased() }
-        return String(s.prefix(1)).uppercased()
+
+    func shortDate(_ d: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "dd/MM"
+        return f.string(from: d)
     }
 }
 
-struct MessageBubble: View {
-    let message: MessageModel
-    
+// MARK: - CHAT VIEW
+
+struct ChatView: View {
+    var chat: SMSConversation
+
+    @State var messages: [SMSMessage] = []
+    @State var newMessage = ""
+
     var body: some View {
-        HStack {
-            if message.isFromMe { Spacer() }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(message.text ?? "[Pièce jointe]")
-                    .padding(10)
-                    .background(message.isFromMe ? Color.blue : Color.gray.opacity(0.15))
-                    .foregroundColor(message.isFromMe ? .white : .primary)
-                    .cornerRadius(16)
-                
-                if let d = message.date {
-                    Text(longFormatter.string(from: d))
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                }
-            }
-            .frame(maxWidth: 320, alignment: message.isFromMe ? .trailing : .leading)
-            
-            if !message.isFromMe { Spacer() }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-    }
-}
+        VStack(spacing:0) {
 
-
-// ---------------------------
-// MARK: - Main Messages UI
-// ---------------------------
-
-struct Messages: View {
-    
-    @State private var conversations: [Conversation] = []
-    @State private var selectedChatId: Int64? = nil
-    @State private var messagesInChat: [MessageModel] = []
-    @State private var smsReader: SQLiteSMS? = nil
-    @State private var current_nav_view: String = "Main"
-    
-    var body: some View {
-        
-        GeometryReader { geo in
-            VStack(spacing: 0) {
-                
-                status_bar_in_app()
-                    .frame(height: 24)
-                
-                messages_title_bar(title: "Messages")
-                    .frame(height: 60)
-                
-                Divider()
-                
-                HStack(spacing:0) {
-                    
-                    // CONVERSATIONS LIST
-                    List(conversations) { c in
-                        Button {
-                            openChat(c.id)
-                        } label {
-                            ConversationRow(convo: c)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .frame(width: geo.size.width * 0.36)
-                    
-                    Divider()
-                    
-                    // CHAT VIEW
-                    Group {
-                        if current_nav_view == "Main" {
-                            VStack {
-                                Spacer()
-                                Text("Sélectionne une conversation")
-                                    .foregroundColor(.gray)
-                                Spacer()
-                            }
-                        } else {
-                            chatView
-                        }
-                    }
-                    .frame(width: geo.size.width * 0.64)
-                }
-            }
-            .background(Color.white)
-            .onAppear(perform: loadConversations)
-        }
-    }
-    
-    
-    // MARK: Chat Loading
-    private func loadConversations() {
-        smsReader = SQLiteSMS()
-        if let r = smsReader {
-            conversations = r.fetchConversations()
-        }
-    }
-    
-    private func openChat(_ id: Int64) {
-        selectedChatId = id
-        withAnimation { current_nav_view = "Chat" }
-        loadMessages(chatId: id)
-    }
-    
-    private func loadMessages(chatId: Int64) {
-        Task.detached {
-            guard let r = smsReader else { return }
-            let fetched = r.fetchMessages(forChatId: chatId)
-            
-            await MainActor.run {
-                withAnimation {
-                    messagesInChat = fetched
-                }
-            }
-        }
-    }
-    
-    
-    // MARK: Chat view
-    private var chatView: some View {
-        
-        VStack(spacing: 0) {
-            
-            HStack {
-                Button {
-                    withAnimation { current_nav_view = "Main" }
-                } label {
-                    Image(systemName: "chevron.left")
-                }
-                .padding()
-                
-                Text("Conversation")
-                    .font(.headline)
-                
-                Spacer()
-            }
-            
-            Divider()
-            
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack {
-                        ForEach(messagesInChat) { msg in
-                            MessageBubble(message: msg).id(msg.id)
+                    LazyVStack(alignment: .leading, spacing: 10) {
+
+                        ForEach(messages) { msg in
+                            HStack {
+                                if msg.isFromMe == false { Spacer() }
+
+                                VStack(alignment: msg.isFromMe ? .trailing : .leading) {
+                                    
+                                    if let path = msg.attachmentPath,
+                                       let img = UIImage(contentsOfFile: path) {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(maxWidth: 220)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .padding(msg.isFromMe ? .leading : .trailing, 50)
+                                    }
+
+                                    if let t = msg.text {
+                                        Text(t)
+                                            .padding(10)
+                                            .background(
+                                                msg.isFromMe ?
+                                                    Color(red: 0.20, green: 0.52, blue: 1.0) :
+                                                    Color(red: 210/255, green: 210/255, blue: 210/255)
+                                            )
+                                            .foregroundColor(msg.isFromMe ? .white : .black)
+                                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                                            .shadow(color: .black.opacity(0.15), radius: 2)
+                                            .padding(msg.isFromMe ? .leading : .trailing, 50)
+                                    }
+                                }
+
+                                if msg.isFromMe == true { Spacer() }
+                            }
+                        }
+                    }
+                    .padding()
+                }
+                .onAppear {
+                    messages = SMSDatabase.shared.fetchMessages(forChat: chat.id)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        if let last = messages.last {
+                            withAnimation { proxy.scrollTo(last.id) }
                         }
                     }
                 }
-                .onChange(of: messagesInChat.count) { _ in
-                    scrollToBottom(proxy)
-                }
-                .onAppear {
-                    scrollToBottom(proxy)
-                }
             }
+
+            // input bar
+            inputBar
         }
+        .navigationBarTitle(chat.handle, displayMode: .inline)
     }
-    
-    private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        if let last = messagesInChat.last {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo(last.id, anchor: .bottom)
-                }
+
+    // MARK: - Input bar iOS 6
+
+    var inputBar: some View {
+        HStack {
+            TextField("Message", text: $newMessage)
+                .textFieldStyle(PlainTextFieldStyle())
+                .padding(8)
+                .background(Color.white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.gray.opacity(0.5), lineWidth: 1)
+                )
+
+            Button(action: sendMessage) {
+                Text("Envoyer")
+                    .padding(8)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(6)
             }
         }
+        .padding()
+        .background(Color(red: 230/255, green: 230/255, blue: 230/255))
+        .shadow(radius: 2)
+    }
+
+    func sendMessage() {
+        guard newMessage.count > 0 else { return }
+
+        let fake = SMSMessage(
+            id: Int.random(in: 999999...99999999),
+            text: newMessage,
+            isFromMe: true,
+            date: Date(),
+            attachmentPath: nil
+        )
+
+        messages.append(fake)
+        newMessage = ""
+    }
+}
+
+// MARK: - ENTRY POINT
+
+struct MessagesIOS6: View {
+    var body: some View {
+        MessagesListView()
+    }
+}
+
+struct MessagesIOS6_Previews: PreviewProvider {
+    static var previews: some View {
+        MessagesIOS6()
     }
 }
